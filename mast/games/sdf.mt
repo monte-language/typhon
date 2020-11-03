@@ -99,6 +99,9 @@ def shortestDistanceToSurface(sdf, eye, direction, end :Double,
     # Track signs, based on where we've started.
     # XXX Typhon should give Doubles a method for checking the sign bit!
     def sign := sdf(eye)[0].belowZero().pick(-1.0, 1.0)
+    # Best candidate for a hit, if there's been one.
+    var best := null
+    var bestError :Double := pixelRadius
     for i in (0..!maxSteps):
         def step := eye + direction * depth
         def [distance, texture] := sdf(step)
@@ -112,7 +115,7 @@ def shortestDistanceToSurface(sdf, eye, direction, end :Double,
         # actually extremely good and we should treat the remaining negative
         # offset as numerical error.
         if (signedDistance.belowZero()):
-            return [depth, i, texture]
+            return [depth, i, bestError, texture]
 
         # We can and should leave as soon as the first hit happens which is
         # close enough to reasonably occlude the pixel.
@@ -121,34 +124,18 @@ def shortestDistanceToSurface(sdf, eye, direction, end :Double,
         # first hit or nothing.
         def error := signedDistance.abs() / depth
         # traceln(`$i: error $error, threshold $pixelRadius`)
-        if (error < pixelRadius):
-            return [depth, i, texture]
+        if (error < bestError):
+            best := [depth, i, error, texture]
+            bestError := error
 
-        # No hits.
+        # Did we hit the back wall?
         if (depth >= end):
-            return [end, i, null]
+            return if (best == null) { [end, i, bestError, null] } else { best }
 
         depth += signedDistance
 
-    # No hits.
-    return [end, maxSteps, null]
-
-def hardShadow(sdf, light, direction, end :Double) :Double as DeepFrozen:
-    "How much `sdf` contributes to self-occlusion of `light` from `direction`."
-
-    # https://www.iquilezles.org/www/articles/rmshadows/rmshadows.htm
-    # Very much like computing hits, but with a penumbra instead of a pixel
-    # radius. So, if confused, review the standard hit computation first.
-
-    var depth := 0.0
-    for _ in (0..!maxSteps):
-        if (depth >= end):
-            break
-        def [distance, _] := sdf(light + direction * depth)
-        if (distance < 0.000_000_1):
-            return 0.0
-        depth += distance
-    return 1.0
+    # We ran out of steps. Return the best hit we got, if we got one.
+    return if (best == null) { [end, maxSteps, bestError, null] } else { best }
 
 def makeRayDirection(fieldOfView :Double) as DeepFrozen:
     "
@@ -220,23 +207,23 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
         def worldDirPY := viewToWorld(rayDirection(u, v + pixelRadius, aspectRatio))
         def worldDirNY := viewToWorld(rayDirection(u, v - pixelRadius, aspectRatio))
 
-        def [estimate, steps, texture] := shortestDistanceToSurface(sdf, eye,
-                                                                    worldDir,
-                                                                    maxDepth,
-                                                                    pixelRadius)
+        def [estimate, steps, error, texture] := shortestDistanceToSurface(sdf, eye,
+                                                                           worldDir,
+                                                                           maxDepth,
+                                                                           pixelRadius)
         # Clearly show where there is nothing.
         if (estimate >= maxDepth) { return makeColor.clear() }
         # XXX refineEstimate() could compute coverage-to-alpha information by
         # returning the error.
-        def distance := refineEstimate(sdf, eye, worldDir, estimate,
-                                       pixelRadius)
-        # def distance := if (steps >= maxSteps) {
-        #     # Clearly show where we aren't taking enough steps by highlighting
-        #     # with magenta.
-        #     # return makeColor.RGB(1.0, 0.0, 1.0, 1.0)
-        #     # Refine the estimate using Newton's method; maybe it's alright.
-        #     refineEstimate(sdf, eye, worldDir, estimate, pixelRadius)
-        # } else { estimate }
+        # def distance := refineEstimate(sdf, eye, worldDir, estimate,
+        #                                pixelRadius)
+        def distance := if (steps >= maxSteps) {
+            # Clearly show where we aren't taking enough steps by highlighting
+            # with magenta.
+            return makeColor.RGB(1.0, 0.0, 1.0, 1.0)
+            # Refine the estimate using Newton's method; maybe it's alright.
+            refineEstimate(sdf, eye, worldDir, estimate, pixelRadius)
+        } else { estimate }
 
         # traceln(`hit u=$u v=$v estimate=$estimate distance=$distance steps=$steps`)
 
@@ -255,6 +242,8 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
                    worldDirNX / glsl.dot(worldDirNX, N)) * glance
         def dy := (worldDirPY / glsl.dot(worldDirPY, N) -
                    worldDirNY / glsl.dot(worldDirNY, N)) * glance
+        # The amount of the pixel which the object occludes, in [0,1].
+        def coverage := ((pixelRadius - error) / pixelRadius) ** 2
 
         def lights := [
             # Behind the camera, a spotlight.
@@ -274,16 +263,23 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
             # the known intersection point. The maximum distance to travel is
             # to just within a hair of the hit, to avoid acne.
             def v := p - light
-            def intensity := hardShadow(sdf, light, glsl.normalize(v),
-                                        glsl.length(v) - 0.000_000_1)
-            # The light might be blocked entirely; only compute materials if
-            # the point isn't in shade.
-            if (intensity.aboveZero()):
-                color += texture(eye, light, p, N, Z, dx, dy) * lightColor * intensity
+            def lightEnd := glsl.length(v) - 0.000_000_1
+            def [lightDistance, _, lightError, _] := shortestDistanceToSurface(sdf,
+                light, glsl.normalize(v), maxDepth, pixelRadius)
+            # Only compute textures if the light isn't occluded; this means
+            # that the distance is not less than what we expected.
+            if (lightDistance < lightEnd) { continue }
+
+            def intensity := ((pixelRadius - lightError) / pixelRadius) ** 2
+            # Shadow sharpness; [2,128].
+            def shadowK := 2.0
+            def soft := (intensity * shadowK).min(1.0)
+            color += texture(eye, light, p, N, Z, dx, dy) * lightColor * soft
 
         # HDR: We wait until the last moment to clamp, but we *do* clamp.
-        def [r, g, b] := _makeList.fromIterable(color.min(1.0))
-        return makeColor.RGB(r, g, b, 1.0)
+        # Also, coverage to alpha! We'll preunmultiply here.
+        def [r, g, b] := _makeList.fromIterable((color / coverage).min(1.0))
+        return makeColor.RGB(r, g, b, coverage)
 
 # That's it for the code which uses SDFs. Now, for the code which compiles
 # SDFs from CSG descriptions.
@@ -759,7 +755,7 @@ def morningstar :DeepFrozen := {
     def hammered := CSG.Displacement(entireIron, CSG.Dimples(2.0, 2.0, 2.0), 0.02)
     CSG.Translation(CSG.Union(hammered, [
         CSG.Translation(CSG.Sphere(0.7, rubber(CSG.Color(0.7, 0.7, 0.5))), 0.0, 0.0, -5.0),
-    ]), 0.0, 0.0, -1.0)
+    ]), 0.0, 0.0, -2.0)
 }
 
 object costOfConfig as DeepFrozen:
@@ -889,10 +885,8 @@ def traceToPNG(Timer, entropy, width :Int, height :Int, solid) as DeepFrozen:
 
 def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
-    def solid := morningstar(expandCSG)
+    def solid := sines(expandCSG)
     def w := 640
     def h := 360
-    def testSolid := CSG.Displacement(CSG.Sphere(2.0, rubber(CSG.Normal())),
-        CSG.Sines(2.0, 2.0, 2.0), 0.02)
-    def png := traceToPNG(Timer, entropy, w, h, testSolid)
+    def png := traceToPNG(Timer, entropy, w, h, solid)
     return when (makeFileResource("sdf.png")<-setContents(png)) -> { 0 }
