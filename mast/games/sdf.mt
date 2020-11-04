@@ -115,7 +115,7 @@ def shortestDistanceToSurface(sdf, eye, direction, end :Double,
         # actually extremely good and we should treat the remaining negative
         # offset as numerical error.
         if (signedDistance.belowZero()):
-            return [depth, i, bestError, texture]
+            return [depth, i, 0.0, texture]
 
         # We can and should leave as soon as the first hit happens which is
         # close enough to reasonably occlude the pixel.
@@ -123,8 +123,8 @@ def shortestDistanceToSurface(sdf, eye, direction, end :Double,
         # machinery for checking candidate values, but we go with either the
         # first hit or nothing.
         def error := signedDistance.abs() / depth
-        # traceln(`$i: error $error, threshold $pixelRadius`)
         if (error < bestError):
+            # traceln(`$i: error $error, threshold $bestError`)
             best := [depth, i, error, texture]
             bestError := error
 
@@ -553,7 +553,10 @@ def asSDF(entropy) as DeepFrozen:
             }
 
         to Displacement(shape, displacement, scale :Double):
-            # return fn p { shape(p) + displacement(p) * scale }
+            # return fn p {
+            #     def [d, mat] := shape(p)
+            #     [d + displacement(p) * scale, mat]
+            # }
             # Optimization: Since the shape is not displaced by more than
             # [-scale, scale], consider queries which would be further away
             # than that:
@@ -570,7 +573,7 @@ def asSDF(entropy) as DeepFrozen:
             # Some trigonometry and estimates suggest that kappa needs to be
             # fairly large compared to delta, and indeed we otherwise get
             # artifacts for glancing blows.
-            def kappa := scale * 1.5
+            def kappa := scale * 2.0
             return fn p {
                 def [x, m] := shape(p)
                 def rv := if (x > kappa) { x - delta } else { x + displacement(p) * scale }
