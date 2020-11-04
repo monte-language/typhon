@@ -303,95 +303,6 @@ object expandCSG as DeepFrozen:
     match [constructor, args, namedArgs]:
         M.call(CSG, constructor, args, namedArgs)
 
-def combineSpheres(l, r) as DeepFrozen:
-    return if ([l, r] =~ [[lc, lr], [rc, rr]]):
-        def v := rc - lc
-        var lv :Double := glsl.length(v)
-        if (lv == NaN) { lv := 0.0 }
-        # If one sphere is totally inside another, then return the bigger one.
-        # Happens when the smaller center is inside the bigger sphere, and
-        # also the smaller radius plus the distance between centers is smaller
-        # than the bigger radius; this simplifies to the following checks.
-        if (lv + rr <= lr):
-            l
-        else if (lv + lr <= rr):
-            r
-        else:
-            def radius :Double := (lv + lr + rr) * 0.5
-            def center := lc + glsl.normalize(v) * (radius - lr)
-            traceln(`combineSpheres($l, $r) -> [$center, $radius]`)
-            [center, radius]
-
-def combineBounds(shape, shapes :List) as DeepFrozen:
-    var rv := shape
-    for s in (shapes):
-        if (rv == null) { return null }
-        rv := combineSpheres(rv, s)
-    return rv
-
-object boundingSphere as DeepFrozen:
-    "
-    The smallest sphere containing some CSG, or `null` if none exists.
-
-    Spheres are represented as a [center, radius] pair.
-    "
-
-    to Sphere(radius :Double, _mat):
-        return [zero, radius]
-
-    to Box(width :Double, height :Double, depth :Double, _mat):
-        return [zero, (width ** 2 + height ** 2 + depth ** 2).squareRoot()]
-
-    to Cylinder(height :Double, radius :Double, _mat):
-        return [zero, height.euclidean(radius)]
-
-    to Cone(radius :Double, height :Double, _mat):
-        return if (radius <= height) { [zero, height] } else {
-            def r := (height ** 2 + radius ** 2) / (2 * height)
-            [V(0.0, height - r, 0.0), r]
-        }
-
-    to InfiniteCylindricalCross(_x, _y, _z, _mat):
-        return null
-
-    to Translation(shape, dx :Double, dy :Double, dz :Double):
-        return if (shape =~ [center, radius]):
-            [center + V(dx, dy, dz), radius]
-
-    to Rotation(shape, _, _, _, _):
-        return shape
-
-    to Scaling(shape, factor :Double):
-        return if (shape =~ [center, radius]):
-            [center, radius * factor]
-
-    to Displacement(shape, _d, amplitude :Double):
-        return if (shape =~ [center, radius]):
-            [center, radius + amplitude]
-
-    to OrthorhombicClamp(_shape, _p, _w, _h, _d):
-        return null
-
-    to OrthorhombicCrystal(_shape, _w, _h, _d):
-        return null
-
-    to CubicMirror(shape):
-        return if (shape =~ [center, radius]):
-            combineSpheres(shape, [-center, radius])
-
-    to Intersection(shape, shapes :List):
-        return combineBounds(shape, shapes)
-
-    to Union(shape, shapes :List):
-        return combineBounds(shape, shapes)
-
-    to Difference(minuend, _sub):
-        return minuend
-
-    # Ignore colors, materials, etc.
-    match _:
-        null
-
 # See https://iquilezles.org/www/articles/distfunctions/distfunctions.htm for
 # many implementation examples, as well as other primitives not listed here.
 # http://mercury.sexy/hg_sdf/ is another possible source of implementations.
@@ -863,13 +774,12 @@ object costOfSolid as DeepFrozen:
 def traceToPNG(Timer, entropy, width :Int, height :Int, solid) as DeepFrozen:
     traceln(`Tracing solid: $solid`)
     traceln(`Cost: ${solid(costOfSolid)}`)
-    traceln(`Bounding sphere: ${solid(boundingSphere)}`)
     # NB: We only need entropy to seed the SDF's noise; we don't need to
     # continually take random numbers while drawing. This is an infelicity in
     # lib/noise's API.
     def sdf := solid(asSDF(entropy))
     def drawable := drawSignedDistanceFunction(sdf)
-    # def config := samplerConfig.QuasirandomMonteCarlo(5)
+    # def config := samplerConfig.QuasirandomMonteCarlo(3)
     def config := samplerConfig.Center()
     def cost := config(costOfConfig) * solid(costOfSolid) * width * height * maxSteps
     def drawer := makePNG.drawingFrom(drawable, config)(width, height)
