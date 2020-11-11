@@ -65,6 +65,9 @@ object help as DeepFrozen:
         out.print("<help is a gentle introspection assistant. To obtain help on an object, try m`help(obj)`>")
 
     to run(specimen, => showMiranda :Bool := false) :Str:
+        if (!Ref.isNear(specimen)):
+            return `Object $specimen is not near`
+
         def lines := [].diverge()
 
         def iface := specimen._getAllegedInterface()
