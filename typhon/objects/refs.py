@@ -894,8 +894,9 @@ class LocalVatRef(Promise):
         return EVENTUAL
 
     def resolution(self):
-        if self.target.auditedBy(deepFrozenStamp):
-            return self.target
+        target = resolution(self.target)
+        if target.auditedBy(deepFrozenStamp) and target.auditedBy(selfless):
+            return target
         return self
 
     def resolutionRef(self):
