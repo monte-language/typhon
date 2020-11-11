@@ -1,5 +1,5 @@
 import "capn/rpc" =~ ["reader" => RPCReader, "makeWriter" => makeRPCWriter]
-import "lib/capn" =~ [=> loads]
+import "lib/capn" =~ [=> loads, => makeMessageReader]
 import "lib/enum" =~ [=> makeEnum]
 import "lib/streams" =~ [=> alterSink, => flow, => makePump]
 exports (main)
@@ -81,14 +81,19 @@ def fuseCapnSink(sink) as DeepFrozen:
     def segmentPump := makePump.fromStateMachine(makeCapnRPCMachine())
     return alterSink.fusePump(segmentPump, sink)
 
-def makeCapTPTables(source, _sink) as DeepFrozen:
+def makeCapTPTables(source, sink) as DeepFrozen:
+    "Prepare the four tables."
+
     def questions := [].asMap().diverge()
     def answers := [].asMap().diverge()
     def imports := [].asMap().diverge()
-    def ::"exports" := [].asMap().diverge()
+    # We always export the safe scope.
+    def ::"exports" := [=> safeScope].diverge()
 
     var nextQuestionID := 0
-    var nextExportID := 0
+    def nextQuestion():
+        return nextQuestionID += 1
+    var nextExportID := 1
 
     object capTables:
         "
@@ -99,23 +104,54 @@ def makeCapTPTables(source, _sink) as DeepFrozen:
 
         to run(bs :Bytes):
             traceln("Got bytes", bs)
+            traceln("Capn skeleton", makeMessageReader(bs).getRoot())
             def message := loads(bs, RPCReader, "Message")
-            traceln("decoded message", message)
-            switch (message._which()):
+            traceln("Capn message", message)
+            return switch (message._which()):
+                match ==3:
+                    # Return.
+                    def ::"return" := message."return"()
+                    def questionId := ::"return".answerId()
+                    def results := ::"return".results()
+                    traceln("Return: question", questionId, "results", results)
+                    questions[questionId] := results.content()
+                    # Finish the question.
+                    def writer := makeRPCWriter()
+                    def finish := writer.makeFinish(=> questionId)
+                    def message := writer.makeMessage(=> finish)
+                    def bs := writer.dump(message)
+                    sink(bs)
+                match ==4:
+                    # Finish.
+                    def answerId := message.finish().questionId()
+                    traceln("Finish: answer", answerId)
+                    answers.removeKey(answerId)
                 match ==8:
                     # Bootstrap.
                     def answerId := message.bootstrap().questionId()
-                    traceln("bootstrap", answerId)
-                    answers[answerId] := "bootstrap"
+                    traceln("Bootstrap: answer", answerId)
+                    answers[answerId] := null
                     def writer := makeRPCWriter()
-                    def results := writer.makePayload("content" => 0)
-                    def ret := writer.makeReturn(=> answerId, => results)
+                    # Safe scope is at export 0.
+                    def senderHosted := 0
+                    def capTable := [[=> senderHosted]]
+                    # The bootstrap return needs to have null content.
+                    def results := writer.makePayload("content" => 0,
+                                                      => capTable)
+                    def ::"return" := writer.makeReturn(=> answerId, => results)
+                    def message := writer.makeMessage(=> ::"return")
+                    def bs := writer.dump(message)
+                    sink(bs)
+                match i:
+                    traceln("Unknown message type", i,
+                            makeMessageReader(bs).getRoot())
 
         to complete():
             traceln("time to shutdown")
 
         to abort(problem):
             traceln("got problem", problem)
+            traceln.exception(problem)
 
         to getQuestion(index :Int):
             return questions[index]
@@ -123,6 +159,16 @@ def makeCapTPTables(source, _sink) as DeepFrozen:
         to getExportTable():
             # XXX attenuate?
             return ::"exports"
+
+        to bootstrap():
+            "Request the least-powerful interface from the other side."
+            def writer := makeRPCWriter()
+            def questionId := nextQuestion()
+            def bootstrap := writer.makeBootstrap(=> questionId)
+            def message := writer.makeMessage(=> bootstrap)
+            def bs := writer.dump(message)
+            traceln("Requested bootstrap", questionId)
+            return when (sink(bs)) -> { questionId }
 
     flow(source, capTables)
     return capTables
@@ -133,24 +179,26 @@ def serveCapn(endpoint) as DeepFrozen:
 def bootstrapCapn(endpoint) as DeepFrozen:
     def [source, sink] := endpoint.connectStream()
     return when (source, sink) ->
-        traceln("initialized bootstrap connection", source, sink)
-        def writer := makeRPCWriter()
-        def bootstrap := writer.makeBootstrap("questionId" => 0)
-        def message := writer.makeMessage(=> bootstrap)
-        def bs := writer.dump(message)
-        traceln("message", message, "bytes", bs)
-        when (sink(bs)) ->
-            traceln("sent bootstrap, setting up tables")
-            makeCapTPTables(source, sink)
+        traceln("Initialized bootstrap connection", source, sink)
+        def tables := makeCapTPTables(source, sink)
+        traceln("Created client tables", tables)
+        def bs := tables.bootstrap()
+        when (bs) ->
+            traceln("Bootstrapped", bs)
+            tables
 
 def main(_argv, => makeTCP4ServerEndpoint, => makeTCP4ClientEndpoint) as DeepFrozen:
     def serverEndpoint := makeTCP4ServerEndpoint(2323)
     def clientEndpoint := makeTCP4ClientEndpoint(b`127.0.0.1`, 2323)
-    traceln("endpoints", serverEndpoint, clientEndpoint)
+    traceln("Endpoints", serverEndpoint, clientEndpoint)
     def server := serveCapn(serverEndpoint)
     return when (server) ->
-        traceln("started server")
-        def client := bootstrapCapn(clientEndpoint)
-        when (client) ->
-            traceln("bootstrapped client", client)
+        traceln("Started server")
+        def clientTables := bootstrapCapn(clientEndpoint)
+        when (clientTables) ->
+            traceln("Boostrapped client", clientTables)
             0
+    catch problem:
+        traceln("Welp...", problem)
+        traceln.exception(problem)
+        1
