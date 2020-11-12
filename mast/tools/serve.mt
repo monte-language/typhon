@@ -1,3 +1,5 @@
+import "capn/montevalue" =~ ["reader" => monteReader,
+                             "makeWriter" => makeMonteWriter]
 import "capn/rpc" =~ ["reader" => RPCReader, "makeWriter" => makeRPCWriter]
 import "lib/capn" =~ [=> loads, => makeMessageReader]
 import "lib/enum" =~ [=> makeEnum]
@@ -95,7 +97,52 @@ def makeCapTPTables(source, sink) as DeepFrozen:
         return nextQuestionID += 1
     var nextExportID := 1
 
-    object capTables:
+    def capTables
+
+    def makeProxy(qid :Int):
+        def packCall(questionId :Int, verb :Str, args :List, namedArgs :Map):
+            def monteWriter := makeMonteWriter()
+            def na := [for key => value in (namedArgs) ? (key != "FAIL") {
+                [=> key, => value]
+            }]
+            def mm := monteWriter.makeMonteMessage(=> verb, => args,
+                                                   "namedArgs" => na)
+            def writer := makeRPCWriter()
+            def target := writer.makeMessageTarget("importedCap" => qid)
+            def interfaceId := 0xe2597668ccd0fb6a
+            def methodId := 0x0
+            def params := writer.makePayload("contents" => mm, "capTable" => [])
+            def call := writer.makeCall(=> questionId,
+                                        => target,
+                                        => interfaceId,
+                                        => methodId,
+                                        => params,
+                                        "caller" => null)
+            return writer.dump(call)
+
+        def proxy
+
+        object handler:
+            to handleSend(verb :Str, args :List, namedArgs :Map):
+                if (verb == "_whenMoreResolved") { return args[0]<-(proxy) }
+                def questionId := nextQuestion()
+                questions[questionId] := def p
+                def bs := packCall(questionId, verb, args, namedArgs)
+                return when (sink(bs)) -> { p }
+
+            to handleSendOnly(verb :Str, args :List, namedArgs :Map):
+                if (verb == "_whenMoreResolved") { return args[0]<-(proxy) }
+                def questionId := nextQuestion()
+                questions[questionId] := null
+                def bs := packCall(questionId, verb, args, namedArgs)
+                return when (sink(bs)) -> { null }
+
+        def resolution
+
+        bind proxy := Ref.makeProxy(handler, resolution)
+        return proxy
+
+    bind capTables:
         "
         The four tables of CapTP.
 
@@ -168,7 +215,7 @@ def makeCapTPTables(source, sink) as DeepFrozen:
             def message := writer.makeMessage(=> bootstrap)
             def bs := writer.dump(message)
             traceln("Requested bootstrap", questionId)
-            return when (sink(bs)) -> { questionId }
+            return when (sink(bs)) -> { makeProxy(questionId) }
 
     flow(source, capTables)
     return capTables
@@ -182,10 +229,7 @@ def bootstrapCapn(endpoint) as DeepFrozen:
         traceln("Initialized bootstrap connection", source, sink)
         def tables := makeCapTPTables(source, sink)
         traceln("Created client tables", tables)
-        def bs := tables.bootstrap()
-        when (bs) ->
-            traceln("Bootstrapped", bs)
-            tables
+        tables.bootstrap()
 
 def main(_argv, => makeTCP4ServerEndpoint, => makeTCP4ClientEndpoint) as DeepFrozen:
     def serverEndpoint := makeTCP4ServerEndpoint(2323)
@@ -194,10 +238,13 @@ def main(_argv, => makeTCP4ServerEndpoint, => makeTCP4ClientEndpoint) as DeepFro
     def server := serveCapn(serverEndpoint)
     return when (server) ->
         traceln("Started server")
-        def clientTables := bootstrapCapn(clientEndpoint)
-        when (clientTables) ->
-            traceln("Boostrapped client", clientTables)
-            0
+        def remoteBootstrap := bootstrapCapn(clientEndpoint)
+        when (remoteBootstrap) ->
+            traceln("Boostrapped client", remoteBootstrap)
+            def size := remoteBootstrap<-size()
+            when (size) ->
+                traceln("Bootstrap size", size)
+                0
     catch problem:
         traceln("Welp...", problem)
         traceln.exception(problem)
