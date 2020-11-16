@@ -7,7 +7,7 @@ import "lib/streams" =~ [
     => flow :DeepFrozen,
     => makePump :DeepFrozen,
 ]
-exports (makeAMPServer, makeAMPClient, main)
+exports (makeAMPServer, makeAMPClient, makeAMPPool, main)
 
 # Copyright (C) 2015 Google Inc. All rights reserved.
 #
@@ -151,8 +151,13 @@ def makeAMP(sink, handler) as DeepFrozen:
 
     return object AMP:
         to sink() :Sink:
-            def AMPSink(box) as Sink:
-                return process<-(box)
+            object AMPSink as Sink:
+                to run(box):
+                    return process<-(box)
+                to abort(problem):
+                    handler.abort(problem)
+                to complete():
+                    handler.complete()
             def boxPump := makePump.fromStateMachine(makeAMPPacketMachine())
             return alterSink.fusePump(boxPump, AMPSink)
 
@@ -185,6 +190,47 @@ def makeAMPClient(endpoint) as DeepFrozen:
             def amp := makeAMP(sink, handler)
             flow(source, amp.sink())
             amp
+
+
+def makeAMPPool(endpoint) as DeepFrozen:
+    "
+    Make an AMP server which receives connections from worker clients and
+    distributes work among them.
+    "
+
+    var clientId :Int := 0
+    def clients := [].asMap().diverge()
+
+    endpoint.listenStream(fn source, sink {
+        def client :Int := clientId += 1
+        clients[client] := def amp := makeAMP(sink, nextHandler(client))
+
+        object poolHandler {
+            to run(command, arguments) {
+                traceln(`Pool client $client: Command $command arguments $arguments`)
+            }
+            to abort(problem) {
+                traceln(`Pool client $client uncleanly lost: $problem`)
+                traceln.exception(problem)
+                clients.removeKey(client)
+            }
+            to complete() {
+                traceln(`Pool client $client cleanly exited`)
+                clients.removeKey(client)
+            }
+        }
+
+        def root := amp.send("bootstrap", [].asMap(), true)
+        traceln(`Pool client $client: Booting`)
+        when (root) -> {
+            traceln(`Pool client $client: Got root object $root`)
+            def [=> via (lookup) value] := root
+        }
+
+        flow(source, amp.sink())
+    })
+
+    return object poolController {}
 
 def main(argv, => makeTCP4ClientEndpoint, => makeTCP4ServerEndpoint) as DeepFrozen:
     def port := 9876
