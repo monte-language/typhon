@@ -19,6 +19,8 @@ solid = Sphere(double radius, material)
       | Rotation(solid shape, double theta, double ux, double uy, double uz)
       | Scaling(solid shape, double factor)
       | Displacement(solid shape, displacement d, double amplitude)
+      | Twist(solid shape, double k)
+      | Bend(solid shape, double k)
       | OrthorhombicClamp(solid repetend, double period, double width,
                           double height, double depth)
       | OrthorhombicCrystal(solid repetend, double width, double height,
@@ -491,6 +493,26 @@ def asSDF(entropy) as DeepFrozen:
                 [rv, m]
             }
 
+        to Twist(shape, k :Double):
+            return fn p {
+                def [px, py, pz] := V.un(p, null)
+                def kp := k * py
+                def c := kp.cosine()
+                def s := kp.sine()
+                def q := V(px * c - pz * s, px * s + pz * c, py)
+                shape(q)
+            }
+
+        to Bend(shape, k :Double):
+            return fn p {
+                def [px, py, pz] := V.un(p, null)
+                def kp := k * px
+                def c := kp.cosine()
+                def s := kp.sine()
+                def q := V(px * c - py * s, px * s + py * c, pz)
+                shape(q)
+            }
+
         to OrthorhombicClamp(shape, c :Double, lx :Double, ly :Double,
                              lz :Double):
             def l := V(lx, ly, lz)
@@ -639,7 +661,7 @@ def crystal :DeepFrozen := CSG.OrthorhombicClamp(CSG.Difference(
     CSG.Intersection(CSG.Sphere(1.2, emerald),
                      [CSG.Cube(1.0, emerald)]),
     CSG.InfiniteCylindricalCross(0.5, 0.5, 0.5, emerald),
-), 3.0, 3.0, 5.0, 4.0)
+), 3.0, 3.0, 0.0, 4.0)
 # Imitation tinykaboom.
 def kaboom :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0, debugNormal),
     CSG.Noise(3.4, 3.4, 3.4, 5), 3.0)
@@ -671,6 +693,8 @@ def morningstar :DeepFrozen := {
         CSG.Translation(CSG.Sphere(0.7, rubber(CSG.Color(0.7, 0.7, 0.5))), 0.0, 0.0, -5.0),
     ]), 0.0, 0.0, -2.0)
 }
+# A blade of grass.
+def grass :DeepFrozen := CSG.Bend(CSG.Cylinder(2.0, 0.5, rubber(green)), 0.1)
 
 object costOfConfig as DeepFrozen:
     to Center():
@@ -740,6 +764,12 @@ object costOfSolid as DeepFrozen:
     to Displacement(shape, displacement, _):
         return shape + displacement + 1
 
+    to Twist(shape, _):
+        return shape + 1
+
+    to Bend(shape, _):
+        return shape + 1
+
     to OrthorhombicClamp(shape, _, _, _, _):
         return shape + 18
 
@@ -798,7 +828,7 @@ def traceToPNG(Timer, entropy, width :Int, height :Int, solid) as DeepFrozen:
 
 def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
-    def solid := sines(expandCSG)
+    def solid := grass(expandCSG)
     def w := 640
     def h := 360
     def png := traceToPNG(Timer, entropy, w, h, solid)
