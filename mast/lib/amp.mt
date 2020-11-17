@@ -7,7 +7,7 @@ import "lib/streams" =~ [
     => flow :DeepFrozen,
     => makePump :DeepFrozen,
 ]
-exports (makeAMPServer, makeAMPClient, makeAMPPool, main)
+exports (makeAMPServer, makeAMPClient, makeAMPPool)
 
 # Copyright (C) 2015 Google Inc. All rights reserved.
 #
@@ -119,12 +119,15 @@ def makeAMP(sink, handler) as DeepFrozen:
                 # New command.
                 if (_ask == null):
                     # Send-only.
+                    traceln(`AMP: <- $_command (sendOnly)`)
                     handler<-(_command, arguments)
                     null
                 else:
                     def _answer := _ask
+                    traceln(`AMP: <- $_command (send)`)
                     def result := handler<-(_command, arguments)
                     when (result) ->
+                        traceln(`AMP: -> $_command (reply)`)
                         def packet := result | [=> _answer]
                         def packetBytes := packAMPPacket(packet)
                         sink <- (packetBytes)
@@ -132,17 +135,20 @@ def makeAMP(sink, handler) as DeepFrozen:
                         # Even errors will be sent!
                         def packet := result | [=> _answer,
                                                 => _error_description]
+                        traceln(`AMP: -> $_command (error)`)
                         sink<-(packAMPPacket(packet))
             match [=> _answer] | arguments:
                 # Successful reply.
                 def answer := _makeInt.fromBytes(UTF8.encode(_answer, null))
                 if (pending.contains(answer)):
+                    traceln(`AMP: ! $_answer (success)`)
                     pending[answer].resolve(arguments)
                     pending without= (answer)
             match [=> _error] | arguments:
                 # Error reply.
                 def error := _makeInt.fromBytes(_error)
                 if (pending.contains(error)):
+                    traceln(`AMP: ! $_error (error)`)
                     def [=> _error_description := "unknown error"] | _ := arguments
                     pending[error].smash(_error_description)
                     pending without= (error)
@@ -163,6 +169,8 @@ def makeAMP(sink, handler) as DeepFrozen:
 
         to send(command :Str, var arguments :Map, expectReply :Bool):
             return if (expectReply):
+                traceln(`AMP: ? $serial`)
+                traceln(`AMP: -> $command (send)`)
                 arguments |= ["_command" => command, "_ask" => `$serial`]
                 def resolver := def reply
                 pending |= [serial => resolver]
@@ -172,6 +180,7 @@ def makeAMP(sink, handler) as DeepFrozen:
             else:
                 # Send-only. (And there's no reply at all, no, there's no
                 # reply at all...) ~ C.
+                traceln(`AMP: -> $command (sendOnly)`)
                 sink<-(packAMPPacket(arguments))
                 null
 
@@ -192,7 +201,7 @@ def makeAMPClient(endpoint) as DeepFrozen:
             amp
 
 
-def makeAMPPool(endpoint) as DeepFrozen:
+def makeAMPPool(bootExpression :Str, endpoint) as DeepFrozen:
     "
     Make an AMP server which receives connections from worker clients and
     distributes work among them.
@@ -203,7 +212,6 @@ def makeAMPPool(endpoint) as DeepFrozen:
 
     endpoint.listenStream(fn source, sink {
         def client :Int := clientId += 1
-        clients[client] := def amp := makeAMP(sink, nextHandler(client))
 
         object poolHandler {
             to run(command, arguments) {
@@ -219,38 +227,123 @@ def makeAMPPool(endpoint) as DeepFrozen:
                 clients.removeKey(client)
             }
         }
+        def amp := makeAMP(sink, poolHandler)
 
-        def root := amp.send("bootstrap", [].asMap(), true)
+        def ampCall(target :Vow[Str], verb :Str, arguments :Vow[Str],
+                    namedArguments :Vow[Str]) {
+            return when (target, arguments, namedArguments) -> {
+                def rv := amp.send("call", [
+                    => target,
+                    => verb,
+                    => arguments,
+                    => namedArguments,
+                ], true)
+                when (rv) -> { rv["value"] }
+            }
+        }
+
+        def ampNoun(binding :Vow[Str], namedArgs :Vow[Str]) {
+            def slot := ampCall(binding, "get", "lit:[]", namedArgs)
+            return when (slot) -> {
+                ampCall(slot, "get", "lit:[]", namedArgs)
+            }
+        }
+
+        def reflist(refs :List[Vow[Str]]) :Vow[Str] {
+            return when (promiseAllFulfilled(refs)) -> {
+                `list:${";".join(refs)}`
+            }
+        }
+
+        # Boot strategy, starting with safeScope:
+        # 1) Get _makeMap
+        # 2) Run _makeMap.fromPairs() for empty map
+        # 3) Get _makeList for flex list
+        # 4) Upload bootExpression to flex list
+        # 5) Snapshot and join flex list to get expr
+        # 6) Get eval
+        # 7) Run eval(expr, safeScope)
         traceln(`Pool client $client: Booting`)
-        when (root) -> {
-            traceln(`Pool client $client: Got root object $root`)
-            def [=> via (lookup) value] := root
+        def root := amp.send("bootstrap", [].asMap(), true)
+        clients[client] := when (root) -> {
+            def ["value" => remoteSafeScope] := root
+            traceln(`Pool client $client: Bootstrap (0) $remoteSafeScope`)
+
+            # safeScope is a Map, so it can be used as named args until we
+            # have real Maps.
+            def makeMapBinding := ampCall(remoteSafeScope, "get",
+                                          `lit:["&&_makeMap"]`, remoteSafeScope)
+            def makeMap := ampNoun(makeMapBinding, remoteSafeScope)
+            traceln(`Pool client $client: Bootstrap (1) $makeMap`)
+
+            def emptyMap := ampCall(makeMap, "fromPairs", "lit:[[]]",
+                                    remoteSafeScope)
+            traceln(`Pool client $client: Bootstrap (2) $emptyMap`)
+
+            def makeListBinding := ampCall(remoteSafeScope, "get",
+                                           `lit:["&&_makeList"]`, emptyMap)
+            def makeList := ampNoun(makeListBinding, emptyMap)
+            traceln(`Pool client $client: Bootstrap (3) $makeList`)
+
+            def emptyList := ampCall(makeList, "run", "lit:[]", emptyMap)
+            var buffer := emptyList
+            # Upload 4KiB chunks of code.
+            for offset in (0..(bootExpression.size() // 0x100)) {
+                def slice := bootExpression.slice(offset * 0x100, (offset + 1) * 0x100)
+                buffer := ampCall(buffer, "with", `lit:[${M.toQuote(slice)}]`, emptyMap)
+            }
+            traceln(`Pool client $client: Bootstrap (4) $buffer`)
+
+            def remoteExpr := ampCall(`lit:""`, "join", reflist([buffer]), emptyMap)
+            traceln(`Pool client $client: Bootstrap (5) $remoteExpr`)
+
+            def evalBinding := ampCall(remoteSafeScope, "get",
+                                       `lit:["&&eval"]`, emptyMap)
+            def remoteEval := ampNoun(evalBinding, emptyMap)
+            traceln(`Pool client $client: Bootstrap (6) $remoteEval`)
+
+            when (remoteExpr, remoteEval) -> {
+                traceln(`Pool client $client: expr: $remoteExpr remoteEval: $remoteEval`)
+
+                def makeProxyOn(target :Int) {
+                    return object proxyHandler {
+                        to handleSend(verb :Str, args :List, namedArgs :Map) {
+                            # XXX silently drops args and namedArgs!
+                            def rv := ampCall(`ref:$target`, verb, reflist([]), emptyMap)
+                            when (rv) -> {
+                                switch (rv) {
+                                    match `ref:@next` {
+                                        def resolutionBox
+                                        Ref.makeProxy(makeProxyOn(next), resolutionBox)
+                                    }
+                                    match `lit:@i` { eval(i, [=> &&_makeList]) }
+                                }
+                            }
+                        }
+                        to handleSendOnly(verb :Str, args :List, namedArgs :Map) {
+                            # XXX
+                            return proxyHandler.handleSendOnly(verb, args, namedArgs)
+                        }
+                    }
+                }
+
+                def bootedRef := ampCall(remoteEval, "run",
+                                         reflist([remoteExpr, remoteSafeScope]),
+                                         emptyMap)
+                when (bootedRef) -> {
+                    def `ref:@{via (_makeInt) bootedRefHandle}` := bootedRef
+                    def proxyHandler := makeProxyOn(bootedRefHandle)
+                    def resolutionBox
+                    Ref.makeProxy(proxyHandler, resolutionBox)
+                }
+            }
         }
 
         flow(source, amp.sink())
     })
 
-    return object poolController {}
-
-def main(argv, => makeTCP4ClientEndpoint, => makeTCP4ServerEndpoint) as DeepFrozen:
-    def port := 9876
-    switch (argv):
-        match [=="-client"]:
-            def ep := makeTCP4ClientEndpoint(b`127.0.0.1`, port)
-            def client := makeAMPClient(ep)
-            def amp := client.connectStream(fn command, args {
-                traceln(command, args)
-                ["answer" => "42"]
-            })
-            def result := amp <- send("add", ["a" => "17", "b" => "25"], true)
-            when (result) ->
-                traceln("success", result)
-
-        match [=="-server"]:
-            def ep := makeTCP4ServerEndpoint(port)
-            def server := makeAMPServer(ep)
-            server.listenStream(fn command, args {
-                traceln(command, args)
-                ["answer" => "42"]
-            })
-    return 0
+    return object poolController:
+        match [verb, args, namedArgs]:
+            promiseAllFulfilled([for client in (clients) {
+                M.send(client, verb, args, namedArgs)
+            }])
