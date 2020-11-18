@@ -35,6 +35,8 @@ def makeSurgeon() as DeepFrozen:
                     eval(l, [=> &&_makeList])
                 match `ref:@{via (_makeInt) i}`:
                     exitPoints[i]
+                match `list:`:
+                    []
                 match `list:@xs`:
                     [for x in (xs.split(";")) gordianSurgeon.unserialize(x)]
 
@@ -44,7 +46,7 @@ def makeVamp() as DeepFrozen:
     def surgeon := makeSurgeon()
     def bootRef := surgeon.addExit(safeScope)
 
-    return def vamp(command, params):
+    return def vamp(command, params, => FAIL):
         return switch (command):
             match =="bootstrap":
                 ["value" => `ref:$bootRef`]
@@ -63,6 +65,9 @@ def makeVamp() as DeepFrozen:
                     ["value" => surgeon.serialize(rv)]
                 catch problem:
                     traceln.exception(problem)
+                    throw.eject(FAIL, problem)
+            match _:
+                throw.eject(FAIL, `unknown command $command`)
 
 def toBytes(specimen, ej) as DeepFrozen:
     return _makeBytes.fromStr(Str.coerce(specimen, ej))

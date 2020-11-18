@@ -232,6 +232,7 @@ def makeAMPPool(bootExpression :Str, endpoint) as DeepFrozen:
         def ampCall(target :Vow[Str], verb :Str, arguments :Vow[Str],
                     namedArguments :Vow[Str]) {
             return when (target, arguments, namedArguments) -> {
+                traceln(`ampCall($target, $verb, $arguments, $namedArguments)`)
                 def rv := amp.send("call", [
                     => target,
                     => verb,
@@ -305,24 +306,59 @@ def makeAMPPool(bootExpression :Str, endpoint) as DeepFrozen:
             when (remoteExpr, remoteEval) -> {
                 traceln(`Pool client $client: expr: $remoteExpr remoteEval: $remoteEval`)
 
+                # More remote safe tools. We want M in particular.
+                def MBinding := ampCall(remoteSafeScope, "get",
+                                           `lit:["&&M"]`, emptyMap)
+                def remoteM := ampNoun(MBinding, emptyMap)
+                when (remoteM) -> {
+                    traceln(`Pool client $client: M $remoteM`)
+                }
+
+                def [sealRef, unsealRef] := makeBrandPair("AMP proxy")
+                def refBrand := sealRef.getBrand()
+
                 def makeProxyOn(target :Int) {
+                    def self := `ref:$target`
                     return object proxyHandler {
                         to handleSend(verb :Str, args :List, namedArgs :Map) {
-                            # XXX silently drops args and namedArgs!
-                            def rv := ampCall(`ref:$target`, verb, reflist([]), emptyMap)
-                            when (rv) -> {
-                                switch (rv) {
-                                    match `ref:@next` {
-                                        def resolutionBox
-                                        Ref.makeProxy(makeProxyOn(next), resolutionBox)
+                            return switch (verb) {
+                                match =="_printOn" {
+                                    def rv := ampCall(remoteM, "toString",
+                                                      reflist([self]),
+                                                      emptyMap)
+                                    when (rv) -> {
+                                        `<proxy ref via AMP to $rv>`
                                     }
-                                    match `lit:@i` { eval(i, [=> &&_makeList]) }
+                                }
+                                match =="_sealedDispatch" ? (args[0] == refBrand) {
+                                    sealRef(self)
+                                }
+                                match _ {
+                                    def argRefs := [for arg in (args) {
+                                        def box := arg<-_sealedDispatch(refBrand)
+                                        when (box) -> { unsealRef(box) }
+                                    }]
+                                    when (argRefs) -> { traceln("argRefs", argRefs) }
+                                    # XXX silently drops namedArgs!
+                                    def rv := ampCall(self, verb,
+                                                      reflist(argRefs),
+                                                      emptyMap)
+                                    when (rv) -> {
+                                        switch (rv) {
+                                            match `ref:@next` {
+                                                def resolutionBox
+                                                Ref.makeProxy(makeProxyOn(next), resolutionBox)
+                                            }
+                                            match `lit:@i` { eval(i, [=> &&_makeList]) }
+                                            match _ { throw(`Unknown ref $rv`) }
+                                        }
+                                    }
                                 }
                             }
                         }
                         to handleSendOnly(verb :Str, args :List, namedArgs :Map) {
                             # XXX
-                            return proxyHandler.handleSendOnly(verb, args, namedArgs)
+                            return proxyHandler.handleSend(verb, args, namedArgs)
                         }
                     }
                 }
