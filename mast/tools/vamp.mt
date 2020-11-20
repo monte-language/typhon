@@ -1,4 +1,5 @@
 import "lib/amp" =~ [=> makeAMPClient]
+import "lib/json" =~ [=> JSON]
 exports (main)
 
 def makeSurgeon() as DeepFrozen:
@@ -17,28 +18,38 @@ def makeSurgeon() as DeepFrozen:
         to serialize(value):
             traceln("serializing", value)
             return switch (value):
+                match xs :List:
+                    [for x in (xs) gordianSurgeon.serialize(x)]
+                match xs :Map:
+                    [for k => v in (xs) k => gordianSurgeon.serialize(v)]
                 match literal :Any[Double, Int]:
-                    `lit:$literal`
+                    literal
                 match literal :Str ? (literal.size() < 0x100):
-                    `lit:${M.toQuote(literal)}`
+                    if (literal.startsWith("$")) {
+                        "$$" + literal
+                    } else { literal }
                 match via (unscope.fetch) knownExit:
-                    `ref:$knownExit`
+                    `$$ref:$knownExit`
                 match _:
                     def newExit := gordianSurgeon.addExit(value)
                     traceln("Automatic object export", value, newExit)
-                    `ref:$newExit`
+                    `$$ref:$newExit`
 
         to unserialize(depiction):
             traceln("unserializing", depiction)
             return switch (depiction):
-                match `lit:@l`:
-                    eval(l, [=> &&_makeList])
-                match `ref:@{via (_makeInt) i}`:
+                match xs :List:
+                    [for x in (xs) gordianSurgeon.unserialize(x)]
+                match xs :Map:
+                    [for k => v in (xs) k => {
+                        gordianSurgeon.unserialize(v)
+                    }]
+                match `$$$$@x`:
+                    x
+                match `$$ref:@{via (_makeInt) i}`:
                     exitPoints[i]
-                match `list:`:
-                    []
-                match `list:@xs`:
-                    [for x in (xs.split(";")) gordianSurgeon.unserialize(x)]
+                match v:
+                    v
 
 def makeVamp() as DeepFrozen:
     "A basic environment for restricted execution."
@@ -49,20 +60,16 @@ def makeVamp() as DeepFrozen:
     return def vamp(command, params, => FAIL):
         return switch (command):
             match =="bootstrap":
-                ["value" => `ref:$bootRef`]
+                ["value" => `$bootRef`]
             match =="call":
                 def [=> target,
                      => verb :Str,
-                     => arguments,
-                     => namedArguments] := params
-                def t := surgeon.unserialize(target)
-                def args :List := surgeon.unserialize(arguments)
-                def namedArgs :Map := surgeon.unserialize(namedArguments)
-                traceln("calling", t, verb, args, namedArgs)
+                     => arguments :List,
+                     => namedArguments :Map] exit FAIL := surgeon.unserialize(JSON.decode(params["payload"], FAIL))
                 try:
-                    def rv := M.call(t, verb, args, namedArgs)
+                    def rv := M.call(target, verb, arguments, namedArguments)
                     traceln("result", rv)
-                    ["value" => surgeon.serialize(rv)]
+                    ["result" => JSON.encode(surgeon.serialize(rv), FAIL)]
                 catch problem:
                     traceln.exception(problem)
                     throw.eject(FAIL, problem)

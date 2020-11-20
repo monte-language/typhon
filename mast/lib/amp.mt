@@ -1,6 +1,7 @@
 import "unittest" =~ [=> unittest :Any]
 import "lib/enum" =~ [=> makeEnum]
 import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
+import "lib/json" =~ [=> JSON]
 import "lib/streams" =~ [
     => Sink :DeepFrozen,
     => alterSink :DeepFrozen,
@@ -229,31 +230,25 @@ def makeAMPPool(bootExpression :Str, endpoint) as DeepFrozen:
         }
         def amp := makeAMP(sink, poolHandler)
 
-        def ampCall(target :Vow[Str], verb :Str, arguments :Vow[Str],
-                    namedArguments :Vow[Str]) {
-            return when (target, arguments, namedArguments) -> {
+        # NB: Str is the guard of refs.
+
+        def ampCall(target, verb, arguments, namedArguments) {
+            return when (target, promiseAllFulfilled(arguments), namedArguments) -> {
                 traceln(`ampCall($target, $verb, $arguments, $namedArguments)`)
-                def rv := amp.send("call", [
+                def payload := JSON.encode([
                     => target,
                     => verb,
                     => arguments,
                     => namedArguments,
-                ], true)
-                when (rv) -> { rv["value"] }
+                ], null)
+                def rv := amp.send("call", [=> payload], true)
+                when (rv) -> { JSON.decode(rv["result"], null) }
             }
         }
 
-        def ampNoun(binding :Vow[Str], namedArgs :Vow[Str]) {
-            def slot := ampCall(binding, "get", "lit:[]", namedArgs)
-            return when (slot) -> {
-                ampCall(slot, "get", "lit:[]", namedArgs)
-            }
-        }
-
-        def reflist(refs :List[Vow[Str]]) :Vow[Str] {
-            return when (promiseAllFulfilled(refs)) -> {
-                `list:${";".join(refs)}`
-            }
+        def ampNoun(binding :Vow[Str]) {
+            def slot := ampCall(binding, "get", [], [].asMap())
+            return when (slot) -> { ampCall(slot, "get", [], [].asMap()) }
         }
 
         # Boot strategy, starting with safeScope:
@@ -267,40 +262,29 @@ def makeAMPPool(bootExpression :Str, endpoint) as DeepFrozen:
         traceln(`Pool client $client: Booting`)
         def root := amp.send("bootstrap", [].asMap(), true)
         clients[client] := when (root) -> {
-            def ["value" => remoteSafeScope] := root
+            def remoteSafeScope := "$ref:" + root["value"]
             traceln(`Pool client $client: Bootstrap (0) $remoteSafeScope`)
 
-            # safeScope is a Map, so it can be used as named args until we
-            # have real Maps.
-            def makeMapBinding := ampCall(remoteSafeScope, "get",
-                                          `lit:["&&_makeMap"]`, remoteSafeScope)
-            def makeMap := ampNoun(makeMapBinding, remoteSafeScope)
-            traceln(`Pool client $client: Bootstrap (1) $makeMap`)
-
-            def emptyMap := ampCall(makeMap, "fromPairs", "lit:[[]]",
-                                    remoteSafeScope)
-            traceln(`Pool client $client: Bootstrap (2) $emptyMap`)
-
             def makeListBinding := ampCall(remoteSafeScope, "get",
-                                           `lit:["&&_makeList"]`, emptyMap)
-            def makeList := ampNoun(makeListBinding, emptyMap)
+                                           ["&&_makeList"], [].asMap())
+            def makeList := ampNoun(makeListBinding)
             traceln(`Pool client $client: Bootstrap (3) $makeList`)
 
-            def emptyList := ampCall(makeList, "run", "lit:[]", emptyMap)
+            def emptyList := ampCall(makeList, "run", [], [].asMap())
             var buffer := emptyList
             # Upload 4KiB chunks of code.
             for offset in (0..(bootExpression.size() // 0x100)) {
                 def slice := bootExpression.slice(offset * 0x100, (offset + 1) * 0x100)
-                buffer := ampCall(buffer, "with", `lit:[${M.toQuote(slice)}]`, emptyMap)
+                buffer := ampCall(buffer, "with", [slice], [].asMap())
             }
             traceln(`Pool client $client: Bootstrap (4) $buffer`)
 
-            def remoteExpr := ampCall(`lit:""`, "join", reflist([buffer]), emptyMap)
+            def remoteExpr := ampCall(`lit:""`, "join", [buffer], [].asMap())
             traceln(`Pool client $client: Bootstrap (5) $remoteExpr`)
 
             def evalBinding := ampCall(remoteSafeScope, "get",
-                                       `lit:["&&eval"]`, emptyMap)
-            def remoteEval := ampNoun(evalBinding, emptyMap)
+                                       ["&&eval"], [].asMap())
+            def remoteEval := ampNoun(evalBinding)
             traceln(`Pool client $client: Bootstrap (6) $remoteEval`)
 
             when (remoteExpr, remoteEval) -> {
@@ -308,51 +292,64 @@ def makeAMPPool(bootExpression :Str, endpoint) as DeepFrozen:
 
                 # More remote safe tools. We want M in particular.
                 def MBinding := ampCall(remoteSafeScope, "get",
-                                           `lit:["&&M"]`, emptyMap)
-                def remoteM := ampNoun(MBinding, emptyMap)
+                                        ["&&M"], [].asMap())
+                def remoteM := ampNoun(MBinding)
                 when (remoteM) -> {
                     traceln(`Pool client $client: M $remoteM`)
                 }
 
                 def [sealRef, unsealRef] := makeBrandPair("AMP proxy")
                 def refBrand := sealRef.getBrand()
+                def unboxing(x) {
+                    def box := x<-_sealedDispatch(refBrand)
+                    return when (box) -> {
+                        escape ej {
+                            unsealRef.unsealing(box, ej)
+                        } catch _ { x }
+                    }
+                }
 
                 def makeProxyOn(target :Int) {
-                    def self := `ref:$target`
+                    def self := `$$ref:$target`
+
+                    def decode(json) {
+                        return switch (json) {
+                            match xs :List { [for x in (xs) decode(x)] }
+                            match xs :Map {
+                                [for k => v in (xs) k => decode(v)]
+                            }
+                            match `$$ref:@{via (_makeInt) next}` {
+                                def resolutionBox
+                                Ref.makeProxy(makeProxyOn(next), resolutionBox)
+                            }
+                            match `$$$$@x` { x }
+                            match x { x }
+                        }
+                    }
+
                     return object proxyHandler {
                         to handleSend(verb :Str, args :List, namedArgs :Map) {
                             return switch (verb) {
                                 match =="_printOn" {
                                     def rv := ampCall(remoteM, "toString",
-                                                      reflist([self]),
-                                                      emptyMap)
+                                                      [self], [].asMap())
                                     when (rv) -> {
                                         `<proxy ref via AMP to $rv>`
                                     }
                                 }
                                 match =="_sealedDispatch" ? (args[0] == refBrand) {
-                                    sealRef(self)
+                                    sealRef.seal(self)
                                 }
                                 match _ {
                                     def argRefs := [for arg in (args) {
-                                        def box := arg<-_sealedDispatch(refBrand)
-                                        when (box) -> { unsealRef(box) }
+                                        unboxing(arg)
                                     }]
-                                    when (argRefs) -> { traceln("argRefs", argRefs) }
-                                    # XXX silently drops namedArgs!
+                                    def namedArgRefs := [for k => v in (namedArgs) ? (k != "FAIL") k => {
+                                        unboxing(v)
+                                    }]
                                     def rv := ampCall(self, verb,
-                                                      reflist(argRefs),
-                                                      emptyMap)
-                                    when (rv) -> {
-                                        switch (rv) {
-                                            match `ref:@next` {
-                                                def resolutionBox
-                                                Ref.makeProxy(makeProxyOn(next), resolutionBox)
-                                            }
-                                            match `lit:@i` { eval(i, [=> &&_makeList]) }
-                                            match _ { throw(`Unknown ref $rv`) }
-                                        }
-                                    }
+                                                      argRefs, namedArgRefs)
+                                    when (rv) -> { decode(rv) }
                                 }
                             }
                         }
@@ -364,10 +361,10 @@ def makeAMPPool(bootExpression :Str, endpoint) as DeepFrozen:
                 }
 
                 def bootedRef := ampCall(remoteEval, "run",
-                                         reflist([remoteExpr, remoteSafeScope]),
-                                         emptyMap)
+                                         [remoteExpr, remoteSafeScope],
+                                         [].asMap())
                 when (bootedRef) -> {
-                    def `ref:@{via (_makeInt) bootedRefHandle}` := bootedRef
+                    def `$$ref:@{via (_makeInt) bootedRefHandle}` := bootedRef
                     def proxyHandler := makeProxyOn(bootedRefHandle)
                     def resolutionBox
                     Ref.makeProxy(proxyHandler, resolutionBox)
