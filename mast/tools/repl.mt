@@ -158,21 +158,29 @@ def main(_argv,
             "Cleanly exit the REPL."
             cleanup()
 
-        to instantiateModule(basePath :Str, petname :Str) :Vow[DeepFrozen]:
+        to obtainMuffin(basePath :Str, petname :Str) :Vow[DeepFrozen]:
             "
-            Get an instance of the  module named `petname` from `basePath` on
-            the filesystem.
+            Make a muffin from module `petname`, using `basePath` on the
+            filesystem for the module library.
             "
 
             def loader := makeFileLoader(log, basePath, makeFileResource)
             def limo := makeLimo(loader)
             return when (def p := loader(petname)) ->
                 def [source :NullOk[Str], expr] := p
-                when (def m := limo(petname, source, expr)) ->
-                    eval(m, safeScope)
+                limo(petname, source, expr)
             catch problem:
                 traceln.exception(problem)
                 log(`Couldn't instantiate $petname`)
+
+        to instantiateModule(basePath :Str, petname :Str) :Vow[DeepFrozen]:
+            "
+            Get an instance of the module named `petname` from `basePath` on
+            the filesystem.
+            "
+
+            def expr := repl.obtainMuffin(basePath, petname)
+            return when (expr) -> { eval(expr, safeScope) }
 
         to load(basePath :Str, petname :Str) :Vow[Void]:
             "
