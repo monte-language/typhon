@@ -120,15 +120,15 @@ def makeAMP(sink, handler) as DeepFrozen:
                 # New command.
                 if (_ask == null):
                     # Send-only.
-                    traceln(`AMP: <- $_command (sendOnly)`)
+                    # traceln(`AMP: <- $_command (sendOnly)`)
                     handler<-(_command, arguments)
                     null
                 else:
                     def _answer := _ask
-                    traceln(`AMP: <- $_command (send)`)
+                    # traceln(`AMP: <- $_command (send)`)
                     def result := handler<-(_command, arguments)
                     when (result) ->
-                        traceln(`AMP: -> $_command (reply)`)
+                        # traceln(`AMP: -> $_command (reply)`)
                         def packet := result | [=> _answer]
                         def packetBytes := packAMPPacket(packet)
                         sink <- (packetBytes)
@@ -136,20 +136,20 @@ def makeAMP(sink, handler) as DeepFrozen:
                         # Even errors will be sent!
                         def packet := result | [=> _answer,
                                                 => _error_description]
-                        traceln(`AMP: -> $_command (error)`)
+                        # traceln(`AMP: -> $_command (error)`)
                         sink<-(packAMPPacket(packet))
             match [=> _answer] | arguments:
                 # Successful reply.
                 def answer := _makeInt.fromBytes(UTF8.encode(_answer, null))
                 if (pending.contains(answer)):
-                    traceln(`AMP: ! $_answer (success)`)
+                    # traceln(`AMP: ! $_answer (success)`)
                     pending[answer].resolve(arguments)
                     pending without= (answer)
             match [=> _error] | arguments:
                 # Error reply.
                 def error := _makeInt.fromBytes(_error)
                 if (pending.contains(error)):
-                    traceln(`AMP: ! $_error (error)`)
+                    # traceln(`AMP: ! $_error (error)`)
                     def [=> _error_description := "unknown error"] | _ := arguments
                     pending[error].smash(_error_description)
                     pending without= (error)
@@ -170,8 +170,8 @@ def makeAMP(sink, handler) as DeepFrozen:
 
         to send(command :Str, var arguments :Map, expectReply :Bool):
             return if (expectReply):
-                traceln(`AMP: ? $serial`)
-                traceln(`AMP: -> $command (send)`)
+                # traceln(`AMP: ? $serial`)
+                # traceln(`AMP: -> $command (send)`)
                 arguments |= ["_command" => command, "_ask" => `$serial`]
                 def resolver := def reply
                 pending |= [serial => resolver]
@@ -181,7 +181,7 @@ def makeAMP(sink, handler) as DeepFrozen:
             else:
                 # Send-only. (And there's no reply at all, no, there's no
                 # reply at all...) ~ C.
-                traceln(`AMP: -> $command (sendOnly)`)
+                # traceln(`AMP: -> $command (sendOnly)`)
                 sink<-(packAMPPacket(arguments))
                 null
 
@@ -202,11 +202,32 @@ def makeAMPClient(endpoint) as DeepFrozen:
             amp
 
 
-def makeAMPPool(bootExpression :Str, endpoint) as DeepFrozen:
+def deepFulfilled(p) as DeepFrozen:
+    "Generic version of promiseAllFulfilled over lists and maps."
+
+    return when (p) ->
+        if (p =~ l :Any[List, Map]):
+            promiseAllFulfilled([for x in (l) deepFulfilled(x)])
+        else:
+            p
+
+
+
+def makeAMPPool(bootExpression :DeepFrozen, endpoint) as DeepFrozen:
     "
     Make an AMP server which receives connections from worker clients and
     distributes work among them.
     "
+
+    def bootMAST :Str := {
+        def ctx := makeMASTContext()
+        ctx(bootExpression.expand())
+        _makeStr.fromChars([for i in (ctx.bytes().asList()) '\x00' + i])
+    }
+    traceln(`Boot MAST size ${bootMAST.size()}`)
+    def bootMap :Map := [
+        "mast" => bootMAST,
+    ]
 
     var clientId :Int := 0
     def clients := [].asMap().diverge()
@@ -230,19 +251,24 @@ def makeAMPPool(bootExpression :Str, endpoint) as DeepFrozen:
         }
         def amp := makeAMP(sink, poolHandler)
 
-        # NB: Str is the guard of refs.
-
-        def ampCall(target, verb, arguments, namedArguments) {
-            return when (target, promiseAllFulfilled(arguments), namedArguments) -> {
+        def ampCall(target, verb, arguments, namedArguments, => FAIL) {
+            return when (target, deepFulfilled(arguments),
+                         deepFulfilled(namedArguments)) -> {
                 traceln(`ampCall($target, $verb, $arguments, $namedArguments)`)
-                def payload := JSON.encode([
-                    => target,
-                    => verb,
-                    => arguments,
-                    => namedArguments,
-                ], null)
-                def rv := amp.send("call", [=> payload], true)
-                when (rv) -> { JSON.decode(rv["result"], null) }
+                try {
+                    def payload := JSON.encode([
+                        => target,
+                        => verb,
+                        => arguments,
+                        => namedArguments,
+                    ], FAIL)
+                    def rv := amp.send("call", [=> payload], true)
+                    when (rv) -> { JSON.decode(rv["result"], FAIL) }
+                } catch problem {
+                    traceln(`problem in ampCall($target, $verb, $arguments)`)
+                    traceln.exception(problem)
+                    Ref.broken(problem)
+                }
             }
         }
 
@@ -251,125 +277,77 @@ def makeAMPPool(bootExpression :Str, endpoint) as DeepFrozen:
             return when (slot) -> { ampCall(slot, "get", [], [].asMap()) }
         }
 
-        # Boot strategy, starting with safeScope:
-        # 1) Get _makeMap
-        # 2) Run _makeMap.fromPairs() for empty map
-        # 3) Get _makeList for flex list
-        # 4) Upload bootExpression to flex list
-        # 5) Snapshot and join flex list to get expr
-        # 6) Get eval
-        # 7) Run eval(expr, safeScope)
-        traceln(`Pool client $client: Booting`)
-        def root := amp.send("bootstrap", [].asMap(), true)
-        clients[client] := when (root) -> {
-            def remoteSafeScope := "$ref:" + root["value"]
-            traceln(`Pool client $client: Bootstrap (0) $remoteSafeScope`)
-
-            def makeListBinding := ampCall(remoteSafeScope, "get",
-                                           ["&&_makeList"], [].asMap())
-            def makeList := ampNoun(makeListBinding)
-            traceln(`Pool client $client: Bootstrap (3) $makeList`)
-
-            def emptyList := ampCall(makeList, "run", [], [].asMap())
-            var buffer := emptyList
-            # Upload 4KiB chunks of code.
-            for offset in (0..(bootExpression.size() // 0x100)) {
-                def slice := bootExpression.slice(offset * 0x100, (offset + 1) * 0x100)
-                buffer := ampCall(buffer, "with", [slice], [].asMap())
+        def [sealRef, unsealRef] := makeBrandPair("AMP proxy")
+        def refBrand := sealRef.getBrand()
+        def unboxing(x) {
+            def box := x<-_sealedDispatch(refBrand)
+            return when (box) -> {
+                escape ej {
+                    unsealRef.unsealing(box, ej)
+                } catch _ { x }
             }
-            traceln(`Pool client $client: Bootstrap (4) $buffer`)
+        }
 
-            def remoteExpr := ampCall(`lit:""`, "join", [buffer], [].asMap())
-            traceln(`Pool client $client: Bootstrap (5) $remoteExpr`)
-
-            def evalBinding := ampCall(remoteSafeScope, "get",
-                                       ["&&eval"], [].asMap())
-            def remoteEval := ampNoun(evalBinding)
-            traceln(`Pool client $client: Bootstrap (6) $remoteEval`)
-
-            when (remoteExpr, remoteEval) -> {
-                traceln(`Pool client $client: expr: $remoteExpr remoteEval: $remoteEval`)
-
-                # More remote safe tools. We want M in particular.
-                def MBinding := ampCall(remoteSafeScope, "get",
-                                        ["&&M"], [].asMap())
-                def remoteM := ampNoun(MBinding)
-                when (remoteM) -> {
-                    traceln(`Pool client $client: M $remoteM`)
-                }
-
-                def [sealRef, unsealRef] := makeBrandPair("AMP proxy")
-                def refBrand := sealRef.getBrand()
-                def unboxing(x) {
-                    def box := x<-_sealedDispatch(refBrand)
-                    return when (box) -> {
-                        escape ej {
-                            unsealRef.unsealing(box, ej)
-                        } catch _ { x }
+        object makeProxy {
+            to decode(json) {
+                return switch (json) {
+                    match xs :List { [for x in (xs) makeProxy.decode(x)] }
+                    match xs :Map {
+                        [for k => v in (xs) k => makeProxy.decode(v)]
                     }
-                }
-
-                def makeProxyOn(target :Int) {
-                    def self := `$$ref:$target`
-
-                    def decode(json) {
-                        return switch (json) {
-                            match xs :List { [for x in (xs) decode(x)] }
-                            match xs :Map {
-                                [for k => v in (xs) k => decode(v)]
-                            }
-                            match `$$ref:@{via (_makeInt) next}` {
-                                def resolutionBox
-                                Ref.makeProxy(makeProxyOn(next), resolutionBox)
-                            }
-                            match `$$$$@x` { x }
-                            match x { x }
-                        }
+                    match `$$ref:@{via (_makeInt) next}` {
+                        def resolutionBox
+                        Ref.makeProxy(makeProxy.on(next), resolutionBox)
                     }
+                    match `$$$$@x` { x }
+                    match x { x }
+                }
+            }
 
-                    return object proxyHandler {
-                        to handleSend(verb :Str, args :List, namedArgs :Map) {
-                            return switch (verb) {
-                                match =="_printOn" {
-                                    def rv := ampCall(remoteM, "toString",
-                                                      [self], [].asMap())
-                                    when (rv) -> {
-                                        `<proxy ref via AMP to $rv>`
+            to on(target :Int) {
+                def self := `$$ref:$target`
+
+                return object proxyHandler {
+                    to handleSend(verb :Str, args :List, namedArgs :Map) {
+                        return switch (verb) {
+                            match =="_sealedDispatch" ? (!args.isEmpty()) {
+                                when (def b := args[0]) -> {
+                                    if (_equalizer.sameYet(b, refBrand)) {
+                                        sealRef.seal(self)
                                     }
                                 }
-                                match =="_sealedDispatch" ? (args[0] == refBrand) {
-                                    sealRef.seal(self)
-                                }
-                                match _ {
-                                    def argRefs := [for arg in (args) {
-                                        unboxing(arg)
-                                    }]
-                                    def namedArgRefs := [for k => v in (namedArgs) ? (k != "FAIL") k => {
-                                        unboxing(v)
-                                    }]
-                                    def rv := ampCall(self, verb,
-                                                      argRefs, namedArgRefs)
-                                    when (rv) -> { decode(rv) }
-                                }
+                            }
+                            match _ {
+                                def argRefs := [for arg in (args) {
+                                    unboxing(arg)
+                                }]
+                                # XXX we could reflect FAIL, but we'd need to
+                                # reflect arbitrary refs. Maybe that's coming up?
+                                def namedArgRefs := [for k => v in (namedArgs) ? (k != "FAIL") k => {
+                                    unboxing(v)
+                                }]
+                                def rv := ampCall(self, verb,
+                                                  argRefs, namedArgRefs)
+                                when (rv) -> { makeProxy.decode(rv) }
                             }
                         }
-                        to handleSendOnly(verb :Str, args :List, namedArgs :Map) {
-                            # XXX
-                            return proxyHandler.handleSend(verb, args, namedArgs)
-                        }
+                    }
+                    to handleSendOnly(verb :Str, args :List, namedArgs :Map) {
+                        # XXX
+                        return proxyHandler.handleSend(verb, args, namedArgs)
                     }
                 }
-
-                def bootedRef := ampCall(remoteEval, "run",
-                                         [remoteExpr, remoteSafeScope],
-                                         [].asMap())
-                when (bootedRef) -> {
-                    def `$$ref:@{via (_makeInt) bootedRefHandle}` := bootedRef
-                    def proxyHandler := makeProxyOn(bootedRefHandle)
-                    def resolutionBox
-                    Ref.makeProxy(proxyHandler, resolutionBox)
-                }
             }
+        }
+
+        # Boot strategy starting with some custom MAST. Just upload the MAST
+        # in a single call! Hope it's small enough.
+        traceln(`Pool client $client: Booting`)
+        def root := amp.send("bootstrap", bootMap, true)
+        clients[client] := when (root) -> {
+            traceln(`Pool client $client: Booted root $root`)
+            def ["value" => bootRef] := root
+            makeProxy.decode(JSON.decode(bootRef, null))
         }
 
         flow(source, amp.sink())

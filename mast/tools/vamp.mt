@@ -16,13 +16,12 @@ def makeSurgeon() as DeepFrozen:
             return rv
 
         to serialize(value):
-            traceln("serializing", value)
             return switch (value):
                 match xs :List:
                     [for x in (xs) gordianSurgeon.serialize(x)]
                 match xs :Map:
                     [for k => v in (xs) k => gordianSurgeon.serialize(v)]
-                match literal :Any[Double, Int]:
+                match literal :Any[Bool, Double, Int, Void]:
                     literal
                 match literal :Str ? (literal.size() < 0x100):
                     if (literal.startsWith("$")) {
@@ -32,11 +31,10 @@ def makeSurgeon() as DeepFrozen:
                     `$$ref:$knownExit`
                 match _:
                     def newExit := gordianSurgeon.addExit(value)
-                    traceln("Automatic object export", value, newExit)
+                    # traceln("Automatic object export", value, newExit)
                     `$$ref:$newExit`
 
         to unserialize(depiction):
-            traceln("unserializing", depiction)
             return switch (depiction):
                 match xs :List:
                     [for x in (xs) gordianSurgeon.unserialize(x)]
@@ -55,20 +53,26 @@ def makeVamp() as DeepFrozen:
     "A basic environment for restricted execution."
 
     def surgeon := makeSurgeon()
-    def bootRef := surgeon.addExit(safeScope)
 
     return def vamp(command, params, => FAIL):
         return switch (command):
             match =="bootstrap":
-                ["value" => `$bootRef`]
+                def [=> mast] exit FAIL := params
+                traceln(`Got MAST of ${mast.size()}`)
+                def expr := readMAST(_makeBytes.fromStr(mast),
+                                     "filename" => "<vamp>", => FAIL)
+                def module := eval(expr, safeScope)(null)
+                traceln(`Got module $module`)
+                def bootRef := JSON.encode(surgeon.serialize(module), FAIL)
+                ["value" => bootRef]
             match =="call":
                 def [=> target,
                      => verb :Str,
                      => arguments :List,
                      => namedArguments :Map] exit FAIL := surgeon.unserialize(JSON.decode(params["payload"], FAIL))
+                traceln("call", target, verb, arguments, namedArguments)
                 try:
                     def rv := M.call(target, verb, arguments, namedArguments)
-                    traceln("result", rv)
                     ["result" => JSON.encode(surgeon.serialize(rv), FAIL)]
                 catch problem:
                     traceln.exception(problem)
