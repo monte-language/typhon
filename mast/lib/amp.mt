@@ -290,6 +290,7 @@ def makeAMPPool(bootExpression :DeepFrozen, endpoint) as DeepFrozen:
 
         object makeProxy {
             to decode(json) {
+                traceln("decoding", json)
                 return switch (json) {
                     match xs :List { [for x in (xs) makeProxy.decode(x)] }
                     match xs :Map {
@@ -297,7 +298,8 @@ def makeAMPPool(bootExpression :DeepFrozen, endpoint) as DeepFrozen:
                     }
                     match `$$ref:@{via (_makeInt) next}` {
                         def resolutionBox
-                        Ref.makeProxy(makeProxy.on(next), resolutionBox)
+                        Ref.makeProxy(makeProxy.on(next), resolutionBox,
+                                      "resolved" => true)
                     }
                     match `$$$$@x` { x }
                     match x { x }
@@ -309,13 +311,21 @@ def makeAMPPool(bootExpression :DeepFrozen, endpoint) as DeepFrozen:
 
                 return object proxyHandler {
                     to handleSend(verb :Str, args :List, namedArgs :Map) {
-                        return switch (verb) {
-                            match =="_sealedDispatch" ? (!args.isEmpty()) {
-                                when (def b := args[0]) -> {
+                        traceln("handling send", verb, args, namedArgs)
+                        return switch ([verb, args]) {
+                            match [=="_sealedDispatch", [b]] {
+                                traceln("sealed dispatch", b)
+                                when (b) -> {
                                     if (_equalizer.sameYet(b, refBrand)) {
                                         sealRef.seal(self)
                                     }
                                 }
+                            }
+                            match [=="_whenMoreResolved", [cb]] {
+                                # 'More resolved?' I am your proxy! I am the
+                                # most resolved you are *ever* gonna get!
+                                traceln("more resolved", cb)
+                                cb<-(proxyHandler)
                             }
                             match _ {
                                 def argRefs := [for arg in (args) {
@@ -326,6 +336,7 @@ def makeAMPPool(bootExpression :DeepFrozen, endpoint) as DeepFrozen:
                                 def namedArgRefs := [for k => v in (namedArgs) ? (k != "FAIL") k => {
                                     unboxing(v)
                                 }]
+                                traceln("unboxed", argRefs, namedArgRefs)
                                 def rv := ampCall(self, verb,
                                                   argRefs, namedArgRefs)
                                 when (rv) -> { makeProxy.decode(rv) }

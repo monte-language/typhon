@@ -66,17 +66,26 @@ def makeVamp() as DeepFrozen:
                 def bootRef := JSON.encode(surgeon.serialize(module), FAIL)
                 ["value" => bootRef]
             match =="call":
-                def [=> target,
-                     => verb :Str,
-                     => arguments :List,
-                     => namedArguments :Map] exit FAIL := surgeon.unserialize(JSON.decode(params["payload"], FAIL))
-                traceln("call", target, verb, arguments, namedArguments)
-                try:
-                    def rv := M.call(target, verb, arguments, namedArguments)
-                    ["result" => JSON.encode(surgeon.serialize(rv), FAIL)]
+                escape badCall:
+                    def [=> payload] exit badCall := params
+                    def unserialized := surgeon.unserialize(JSON.decode(payload, badCall))
+                    def [=> target,
+                         => verb :Str,
+                         => arguments :List,
+                         => namedArguments :Map] exit badCall := unserialized
+                    traceln("call", target, verb, arguments, namedArguments)
+                    try:
+                        def rv := M.call(target, verb, arguments, namedArguments)
+                        traceln("call result", rv)
+                        def serialized := JSON.encode(surgeon.serialize(rv), FAIL)
+                        traceln("serialized", serialized)
+                        ["result" => serialized]
+                    catch problem:
+                        traceln("call problem", problem)
+                        traceln.exception(problem)
+                        throw.eject(FAIL, problem)
                 catch problem:
-                    traceln.exception(problem)
-                    throw.eject(FAIL, problem)
+                    traceln("bad call", params)
             match _:
                 throw.eject(FAIL, `unknown command $command`)
 
