@@ -54,13 +54,18 @@ def makeVamp() as DeepFrozen:
 
     def surgeon := makeSurgeon()
 
+    var bootMAST := b``
+
     return def vamp(command, params, => FAIL):
         return switch (command):
-            match =="bootstrap":
+            match =="load":
                 def [=> mast] exit FAIL := params
-                traceln(`Got MAST of ${mast.size()}`)
-                def expr := readMAST(_makeBytes.fromStr(mast),
-                                     "filename" => "<vamp>", => FAIL)
+                bootMAST += _makeBytes.fromStr(mast)
+                traceln(`Got MAST slice of ${mast.size()} (${bootMAST.size()} total)`)
+                [].asMap()
+            match =="bootstrap":
+                traceln(`Got boot MAST of ${bootMAST.size()}`)
+                def expr := readMAST(bootMAST, "filename" => "<vamp>", => FAIL)
                 def module := eval(expr, safeScope)(null)
                 traceln(`Got module $module`)
                 def bootRef := JSON.encode(surgeon.serialize(module), FAIL)

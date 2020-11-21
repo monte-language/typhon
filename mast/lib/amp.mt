@@ -78,7 +78,9 @@ def makeAMPPacketMachine() as DeepFrozen:
                         [KEY, 2]
 
         to results():
-            return results
+            def rv := results
+            results := []
+            return rv
 
 
 def packAMPPacket(packet :Map[Str, Str]) :Bytes as DeepFrozen:
@@ -120,36 +122,35 @@ def makeAMP(sink, handler) as DeepFrozen:
                 # New command.
                 if (_ask == null):
                     # Send-only.
-                    # traceln(`AMP: <- $_command (sendOnly)`)
+                    traceln(`AMP: <- $_command (sendOnly)`)
                     handler<-(_command, arguments)
                     null
                 else:
                     def _answer := _ask
-                    # traceln(`AMP: <- $_command (send)`)
+                    traceln(`AMP: <- $_command (send)`)
                     def result := handler<-(_command, arguments)
                     when (result) ->
-                        # traceln(`AMP: -> $_command (reply)`)
+                        traceln(`AMP: -> $_command (reply)`)
                         def packet := result | [=> _answer]
-                        def packetBytes := packAMPPacket(packet)
-                        sink <- (packetBytes)
+                        sink<-(packAMPPacket(packet))
                     catch _error_description:
                         # Even errors will be sent!
                         def packet := result | [=> _answer,
                                                 => _error_description]
-                        # traceln(`AMP: -> $_command (error)`)
+                        traceln(`AMP: -> $_command (error)`)
                         sink<-(packAMPPacket(packet))
             match [=> _answer] | arguments:
                 # Successful reply.
                 def answer := _makeInt.fromBytes(UTF8.encode(_answer, null))
                 if (pending.contains(answer)):
-                    # traceln(`AMP: ! $_answer (success)`)
+                    traceln(`AMP: ! $_answer (success)`)
                     pending[answer].resolve(arguments)
                     pending without= (answer)
             match [=> _error] | arguments:
                 # Error reply.
                 def error := _makeInt.fromBytes(_error)
                 if (pending.contains(error)):
-                    # traceln(`AMP: ! $_error (error)`)
+                    traceln(`AMP: ! $_error (error)`)
                     def [=> _error_description := "unknown error"] | _ := arguments
                     pending[error].smash(_error_description)
                     pending without= (error)
@@ -170,8 +171,8 @@ def makeAMP(sink, handler) as DeepFrozen:
 
         to send(command :Str, var arguments :Map, expectReply :Bool):
             return if (expectReply):
-                # traceln(`AMP: ? $serial`)
-                # traceln(`AMP: -> $command (send)`)
+                traceln(`AMP: ? $serial`)
+                traceln(`AMP: -> $command (send)`)
                 arguments |= ["_command" => command, "_ask" => `$serial`]
                 def resolver := def reply
                 pending |= [serial => resolver]
@@ -181,7 +182,7 @@ def makeAMP(sink, handler) as DeepFrozen:
             else:
                 # Send-only. (And there's no reply at all, no, there's no
                 # reply at all...) ~ C.
-                # traceln(`AMP: -> $command (sendOnly)`)
+                traceln(`AMP: -> $command (sendOnly)`)
                 sink<-(packAMPPacket(arguments))
                 null
 
@@ -225,9 +226,6 @@ def makeAMPPool(bootExpression :DeepFrozen, endpoint) as DeepFrozen:
         _makeStr.fromChars([for i in (ctx.bytes().asList()) '\x00' + i])
     }
     traceln(`Boot MAST size ${bootMAST.size()}`)
-    def bootMap :Map := [
-        "mast" => bootMAST,
-    ]
 
     var clientId :Int := 0
     def clients := [].asMap().diverge()
@@ -351,10 +349,24 @@ def makeAMPPool(bootExpression :DeepFrozen, endpoint) as DeepFrozen:
             }
         }
 
-        # Boot strategy starting with some custom MAST. Just upload the MAST
+        # Boot strategy starting with some custom MAST. Upload the MAST in
+        # slices with the "load" command, and then use the "bootstrap" command
+        # to call it.
         # in a single call! Hope it's small enough.
-        traceln(`Pool client $client: Booting`)
-        def root := amp.send("bootstrap", bootMap, true)
+        traceln(`Pool client $client: Copying boot module`)
+        # Use 32KiB chunks for upload.
+        def chunkSize := 0x8_000
+        def chunks := [for i in (0..(bootMAST.size() // chunkSize)) {
+            def start := i * chunkSize
+            def stop := (i + 1) * chunkSize
+            def mast := bootMAST.slice(start, stop)
+            traceln(`Pool client $client: Boot slice $i ($start..!$stop)`)
+            amp.send("load", [=> mast], true)
+        }]
+        def root := when (promiseAllFulfilled(chunks)) -> {
+            traceln(`Pool client $client: Booting`)
+            amp.send("bootstrap", [].asMap(), true)
+        }
         clients[client] := when (root) -> {
             traceln(`Pool client $client: Booted root $root`)
             def ["value" => bootRef] := root
