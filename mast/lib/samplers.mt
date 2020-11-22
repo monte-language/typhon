@@ -2,7 +2,7 @@ import "lib/asdl" =~ [=> buildASDLModule]
 import "lib/colors" =~ [=> makeColor]
 import "lib/welford" =~ [=> makeWelford]
 import "lib/vectors" =~ [=> V]
-exports (samplerConfig, makeDiscreteSampler)
+exports (samplerConfig, costOfConfig, makeDiscreteSampler)
 
 def ["ASTBuilder" => samplerConfig] | _ := eval(buildASDLModule(`
 sampler = Center
@@ -91,6 +91,27 @@ def needsMoreSamples(samplers :List, qualityCutoff :Double) as DeepFrozen:
     # Quality is in nines, probability is 1 - nines. We want an improbably
     # high-quality sample, so we want to flip probability around.
     return 1.0 - probability > qualityCutoff
+
+object costOfConfig as DeepFrozen:
+    "
+    How many samples a given sampler configuration is expected to consume
+    per fragment.
+    "
+
+    to Center() :Int:
+        return 1
+
+    to Quincunx() :Int:
+        return 5
+
+    to QuasirandomMonteCarlo(count :Int) :Int:
+        return count
+
+    to TTest(sampler, quality :Double, minimumCount :Int, maximumCount :Int) :Int:
+        # q% of the time, we'll be unsatisfied with the typical pixel. But
+        # the typical pixel will be typical most of the time. Using an old
+        # statistics rule of thumb for normal distributions, "most" is 2/3.
+        return 3 * sampler * (quality * maximumCount + (1.0 - quality) * minimumCount).floor()
 
 def makeDiscreteSampler(drawable, config,
                         width :(Int > 0),
