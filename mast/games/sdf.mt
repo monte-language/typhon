@@ -1,7 +1,7 @@
-import "lib/colors" =~ [=> makeColor]
 import "lib/entropy/entropy" =~ [=> makeEntropy]
 import "lib/samplers" =~ [=> samplerConfig, => costOfConfig]
 import "lib/csg" =~ [=> CSG, => expandCSG, => asSDF, => costOfSolid, => drawSDF]
+import "lib/promises" =~ [=> makeSemaphoreRef]
 import "fun/png" =~ [=> makePNG]
 exports (main)
 
@@ -128,23 +128,41 @@ def traceToPNG(Timer, entropy, width :Int, height :Int, solid) as DeepFrozen:
     # continually take random numbers while drawing. This is an infelicity in
     # lib/noise's API.
     def sdf := solid(asSDF(entropy))
-    def drawable := drawSDF(sdf)
+    # Rate-limit the amount of enqueued work.
+    # XXX dynamically discover this; should be 2 * workers + 1
+    def maxWorkers :Int := 3
+    def [drawable, activeWorkers] := makeSemaphoreRef(drawSDF(sdf), maxWorkers)
     # def config := samplerConfig.QuasirandomMonteCarlo(3)
     def config := samplerConfig.Center()
     def cost := config(costOfConfig) * solid(costOfSolid) * width * height
     def drawer := makePNG.drawingFrom(drawable, config)(width, height)
-    var i := 0
     def start := Timer.unsafeNow()
-    while (true):
-        i += 1
-        if (i % 2000 == 0):
-            def duration := Timer.unsafeNow() - start
-            def pixelsPerSecond := i / duration
-            def timeRemaining := ((width * height) - i) / pixelsPerSecond
-            def normPixels := (pixelsPerSecond * cost).logarithm()
-            traceln(`Status: ${(i * 100) / (width * height)}% ($pixelsPerSecond px/s) ($normPixels work/s) (${timeRemaining}s left)`)
-        drawer.next(__break)
-    return drawer.finish()
+    var i := 0
+    # NB: There are other ways to do this recursion, but we're trying to avoid
+    # a Typhon implementation issue where thousands of chained promises can
+    # resolve in a way which causes a stack overflow.
+    def doneResolver := def done
+    def go():
+        def p := escape ej { drawer.next(ej) } catch _ {
+            doneResolver.resolveRace(null)
+            return
+        }
+
+        return when (p) ->
+            go<-()
+            i += 1
+            if (i % 2000 == 0):
+                def duration := Timer.unsafeNow() - start
+                def pixelsPerSecond := i / duration
+                def timeRemaining := ((width * height) - i) / pixelsPerSecond
+                def normPixels := `(${(pixelsPerSecond * cost).logarithm()} work/s)`
+                def workerStatus := `(${activeWorkers()}/$maxWorkers working)`
+                traceln(`Status: ${(i * 100) / (width * height)}% ($pixelsPerSecond px/s) $workerStatus $normPixels (${timeRemaining}s left)`)
+    # Kick off the workers with the desired parallelism.
+    for _ in (0..!maxWorkers):
+        go<-()
+    return when (done) ->
+        drawer.finish()
 
 def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
@@ -152,4 +170,6 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def w := 640
     def h := 360
     def png := traceToPNG(Timer, entropy, w, h, solid)
-    return when (makeFileResource("sdf.png")<-setContents(png)) -> { 0 }
+    return when (png) ->
+        traceln(`Created PNG of ${png.size()}b`)
+        when (makeFileResource("sdf.png")<-setContents(png)) -> { 0 }

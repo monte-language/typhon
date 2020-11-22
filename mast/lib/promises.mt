@@ -36,7 +36,7 @@ def makeSemaphoreRef(ref, size :(Int > 0)) as DeepFrozen:
         "A patient and polite forwarder."
 
         match [verb, args, namedArgs]:
-            return if (active < size):
+            if (active < size):
                 go(verb, args, namedArgs)
             else:
                 def resolver := def promise

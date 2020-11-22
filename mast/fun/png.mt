@@ -144,26 +144,27 @@ object makePNG as DeepFrozen:
                     def address := addressOf(w, h)
 
                     def color := discreteSampler.pixelAt(w, h)
-                    # Kludge: Color is premultiplied, but PNG stores colors
-                    # unpremultiplied. Fortunately, alpha is a Double and we
-                    # can recover the original color with negligible loss.
-                    def [r, g, b, a] := color.sRGB()
-                    # Don't divide by zero; it'll NaN. Instead, think: If
-                    # alpha is zero, then we can pick an arbitrary color.
-                    # The PNG specification asks that we pick black, which is
-                    # encoded as all zeroes. Incidentally, since the body is
-                    # already all zeroes, we don't have to do anything in that
-                    # case. So, only write the pixel if alpha isn't zero.
-                    if (!a.isZero()):
-                        # Unpremultiply.
-                        def ar := a.reciprocal()
-                        def chans := [r * ar, g * ar, b * ar, a]
-                        for i => chan in (chans):
-                            # Simplest arrangement that will handle infinity
-                            # correctly.
-                            def c := (0x1_0000 * chan).floor().min(0xffff)
-                            body[address + i * 2] := c >> 8
-                            body[address + i * 2 + 1] := c & 0xff
+                    return when (color) ->
+                        # Kludge: Color is premultiplied, but PNG stores colors
+                        # unpremultiplied. Fortunately, alpha is a Double and we
+                        # can recover the original color with negligible loss.
+                        def [r, g, b, a] := color.sRGB()
+                        # Don't divide by zero; it'll NaN. Instead, think: If
+                        # alpha is zero, then we can pick an arbitrary color.
+                        # The PNG specification asks that we pick black, which is
+                        # encoded as all zeroes. Incidentally, since the body is
+                        # already all zeroes, we don't have to do anything in that
+                        # case. So, only write the pixel if alpha isn't zero.
+                        if (!a.isZero()):
+                            # Unpremultiply.
+                            def ar := a.reciprocal()
+                            def chans := [r * ar, g * ar, b * ar, a]
+                            for i => chan in (chans):
+                                # Simplest arrangement that will handle infinity
+                                # correctly.
+                                def c := (0x1_0000 * chan).floor().min(0xffff)
+                                body[address + i * 2] := c >> 8
+                                body[address + i * 2 + 1] := c & 0xff
 
                 to finish():
                     def idat := deflate(_makeBytes.fromInts(body))

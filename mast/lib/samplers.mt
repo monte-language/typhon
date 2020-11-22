@@ -127,6 +127,9 @@ def makeDiscreteSampler(drawable, config,
     samples on `drawable`.
 
     `config` should be built from the parent module's `samplerConfig`.
+
+    `drawable` might not be near; correspondingly, samples are returned as
+    promises.
     "
 
     # How much wider the canvas is than it is tall.
@@ -142,8 +145,8 @@ def makeDiscreteSampler(drawable, config,
     object makeSampler:
         to Center():
             return fn x, y {
-                drawable.drawAt(dw + x * iw, dh + y * ih, => aspectRatio,
-                                => pixelRadius)
+                drawable<-drawAt(dw + x * iw, dh + y * ih, => aspectRatio,
+                                 => pixelRadius)
             }
 
         to Quincunx():
@@ -163,10 +166,11 @@ def makeDiscreteSampler(drawable, config,
             return fn x, y {
                 def bx := x * iw
                 def by := y * ih
-                averageColor([for [dx, dy] in (offsets) {
-                    drawable.drawAt(bx + dx, by + dy, => aspectRatio,
-                                    => pixelRadius)
+                def colors := promiseAllFulfilled([for [dx, dy] in (offsets) {
+                    drawable<-drawAt(bx + dx, by + dy, => aspectRatio,
+                                     => pixelRadius)
                 }])
+                when (colors) -> { averageColor(colors) }
             }
 
         to QuasirandomMonteCarlo(count :Int):
@@ -183,12 +187,13 @@ def makeDiscreteSampler(drawable, config,
                 # b is in the upper-left corner of each pixel. We'll move it
                 # around the pixel by adding jitter in (0, 1).
                 def b := V(x, y) * i
-                averageColor([for _ in (0..!count) {
+                def colors := promiseAllFulfilled([for _ in (0..!count) {
                     # Jitter the coordinates to achieve quasirandom Monte Carlo.
                     def [jx, jy] := V.un(b + (c * pixelRadius), null)
                     c := frac(c + plastic)
-                    drawable.drawAt(jx, jy, => aspectRatio, => pixelRadius)
+                    drawable<-drawAt(jx, jy, => aspectRatio, => pixelRadius)
                 }])
+                when (colors) -> { averageColor(colors) }
             }
 
         to TTest(sampler, quality :Double, minimumCount :Int, maximumCount :Int):
@@ -199,18 +204,27 @@ def makeDiscreteSampler(drawable, config,
             return fn x, y {
                 def samplers := [makeWelford(), makeWelford(), makeWelford(),
                                  makeWelford()]
-                for _ in (0..!minimumCount) {
-                    def color := sampler(x, y)
-                    for i => channel in (color.RGB()) { samplers[i](channel) }
-                }
-                if (needsMoreSamples(samplers, quality)) {
-                    for _ in (minimumCount..!maximumCount) {
-                        def color := sampler(x, y)
-                        for i => channel in (color.RGB()) { samplers[i](channel) }
+                # Blessedly, addition and multiplication are commutative, so
+                # we can do multiple samples in any order and Welford's
+                # algorithm still works.
+                def go() {
+                    def color := sampler<-(x, y)
+                    when (color) -> {
+                        for i => channel in (color.RGB()) {
+                            samplers[i](channel)
+                        }
                     }
                 }
-                def [r, g, b, a] := [for s in (samplers) s.mean()]
-                makeColor.RGB(r, g, b, a)
+                def firstRound := [for _ in (0..!minimumCount) { go<-() }]
+                when (promiseAllFulfilled(firstRound)) -> {
+                    def secondRound := if (needsMoreSamples(samplers, quality)) {
+                        [for _ in (minimumCount..!maximumCount) { go<-() }]
+                    } else { [] }
+                    when (promiseAllFulfilled(secondRound)) -> {
+                        def [r, g, b, a] := [for s in (samplers) s.mean()]
+                        makeColor.RGB(r, g, b, a)
+                    }
+                }
             }
 
     def sampler := config(makeSampler)
