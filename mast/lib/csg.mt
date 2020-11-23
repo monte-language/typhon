@@ -306,7 +306,7 @@ object expandCSG as DeepFrozen:
 # many implementation examples, as well as other primitives not listed here.
 # http://mercury.sexy/hg_sdf/ is another possible source of implementations.
 
-def asSDF(entropy) as DeepFrozen:
+def asSDF(noise) as DeepFrozen:
     "Compile a CSG expression to its corresponding SDF."
 
     return object compileSDF:
@@ -341,7 +341,6 @@ def asSDF(entropy) as DeepFrozen:
             # XXX noise can be filtered using derivatives; I couldn't get it
             # to look right, though?
             def exponents := V(red, green, blue)
-            def noise := makeSimplexNoise(entropy)
             def half := one * 0.5
             return fn p, _N, _Z, dx, dy {
                 def [_, _, z] := V.un(p, null)
@@ -569,12 +568,10 @@ def asSDF(entropy) as DeepFrozen:
 
         to Noise(lx :Double, ly :Double, lz :Double, octaves :Int):
             def l := V(lx, ly, lz)
-            def noise := makeSimplexNoise(entropy)
             return fn p { noise.turbulence(p * l, octaves) }
 
         to Dimples(lx :Double, ly :Double, lz :Double):
             def l := V(lx, ly, lz)
-            def noise := makeSimplexNoise(entropy)
             return fn p { noise.noise(p * l).abs() * 2.0 - 1.0 }
 
 object costOfSolid as DeepFrozen:

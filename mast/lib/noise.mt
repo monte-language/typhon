@@ -27,15 +27,8 @@ def one :DeepFrozen := V(1.0, 1.0, 1.0)
 def sumPlus(x, y) as DeepFrozen { return x + y }
 def sumDouble :DeepFrozen := V.makeFold(0.0, sumPlus)
 
-def makeSimplexNoise(entropy) as DeepFrozen:
-    # Make the list wrap around, and we will need fewer mod operations on the
-    # indices when we do lookups.
-    def p := entropy.shuffle(_makeList.fromIterable(0..!noiseSeedSize)) * 3
-    def edgesSize := edges2.size()
-    def gi(ijk):
-        def [i, j, k] := V.un(ijk.floor() % noiseSeedSize, null)
-        return edges2[p[i + p[j + p[k]]] % edgesSize]
-    return object noiseMaker:
+def makeNoiseMaker(gi :DeepFrozen) as DeepFrozen:
+    return object noiseMaker as DeepFrozen:
         to noise(p):
             # Skew into ijk space. Magic number 1/3=F(3).
             def s := sumDouble(p) / 3
@@ -86,3 +79,26 @@ def makeSimplexNoise(entropy) as DeepFrozen:
             # acceptable risk, I think that it is better to ensure correct
             # ranges here and require users to do their own amplification.
             return rv * 0.5
+
+object makeSimplexNoise as DeepFrozen:
+    to fromShuffledIndices(indices :List[Int]):
+        "
+        Use `indices` to configure simplex noise. When the same `indices` are
+        reused, then the same noise field will be obtained.
+
+        `indices` should be a shuffling of the list [0, 1, 2, …]. Empirically,
+        this list should have around 2 ** 10 elements.
+        "
+
+        # Make the list wrap around, and we will need fewer mod operations on the
+        # indices when we do lookups.
+        def p :List[Int] := indices * 3
+        def edgesSize :Int := edges2.size()
+        def gi(ijk) as DeepFrozen:
+            def [i, j, k] := V.un(ijk.floor() % noiseSeedSize, null)
+            return edges2[p[i + p[j + p[k]]] % edgesSize]
+        return makeNoiseMaker(gi)
+
+    to run(entropy):
+        def indices := entropy.shuffle(_makeList.fromIterable(0..!noiseSeedSize))
+        return makeSimplexNoise.fromShuffledIndices(indices)

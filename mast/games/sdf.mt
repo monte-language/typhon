@@ -1,5 +1,6 @@
 import "lib/entropy/entropy" =~ [=> makeEntropy]
 import "lib/samplers" =~ [=> samplerConfig, => costOfConfig]
+import "lib/noise" =~ [=> makeSimplexNoise]
 import "lib/csg" =~ [=> CSG, => expandCSG, => asSDF, => costOfSolid, => drawSDF]
 import "lib/promises" =~ [=> makeSemaphoreRef]
 import "fun/png" =~ [=> makePNG]
@@ -124,10 +125,10 @@ def grass :DeepFrozen := CSG.Bend(CSG.Cylinder(2.0, 0.5, rubber(green)), 0.1)
 def traceToPNG(Timer, entropy, width :Int, height :Int, solid) as DeepFrozen:
     traceln(`Tracing solid: $solid`)
     traceln(`Cost: ${solid(costOfSolid)}`)
-    # NB: We only need entropy to seed the SDF's noise; we don't need to
-    # continually take random numbers while drawing. This is an infelicity in
-    # lib/noise's API.
-    def sdf := solid(asSDF(entropy))
+    # Prepare some noise. lib/noise explains how to do this.
+    def indices := entropy.shuffle(_makeList.fromIterable(0..!(2 ** 10)))
+    def noise := makeSimplexNoise.fromShuffledIndices(indices)
+    def sdf := solid(asSDF(noise))
     # Rate-limit the amount of enqueued work.
     # XXX dynamically discover this; should be 2 * workers + 1
     def maxWorkers :Int := 3
