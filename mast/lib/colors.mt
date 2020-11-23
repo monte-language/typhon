@@ -37,10 +37,10 @@ def _makeColor(r :Chan, g :Chan, b :Chan, a :Chan) :DeepFrozen as DeepFrozen:
         to alpha():
             return a
 
-        to sRGB():
+        to sRGB() :List[Double]:
             return [linear2sRGB(r), linear2sRGB(g), linear2sRGB(b), a]
 
-        to RGB():
+        to RGB() :List[Double]:
             return [r, g, b, a]
 
         # Names and descriptions of these operators are from Porter-Duff.

@@ -122,35 +122,35 @@ def makeAMP(sink, handler) as DeepFrozen:
                 # New command.
                 if (_ask == null):
                     # Send-only.
-                    traceln(`AMP: <- $_command (sendOnly)`)
+                    # traceln(`AMP: <- $_command (sendOnly)`)
                     handler<-(_command, arguments)
                     null
                 else:
                     def _answer := _ask
-                    traceln(`AMP: <- $_command (send)`)
+                    # traceln(`AMP: <- $_command (send)`)
                     def result := handler<-(_command, arguments)
                     when (result) ->
-                        traceln(`AMP: -> $_command (reply)`)
+                        # traceln(`AMP: -> $_command (reply)`)
                         def packet := result | [=> _answer]
                         sink<-(packAMPPacket(packet))
                     catch _error_description:
                         # Even errors will be sent!
                         def packet := result | [=> _answer,
                                                 => _error_description]
-                        traceln(`AMP: -> $_command (error)`)
+                        # traceln(`AMP: -> $_command (error)`)
                         sink<-(packAMPPacket(packet))
             match [=> _answer] | arguments:
                 # Successful reply.
                 def answer := _makeInt.fromBytes(UTF8.encode(_answer, null))
                 if (pending.contains(answer)):
-                    traceln(`AMP: ! $_answer (success)`)
+                    # traceln(`AMP: ! $_answer (success)`)
                     pending[answer].resolve(arguments)
                     pending without= (answer)
             match [=> _error] | arguments:
                 # Error reply.
                 def error := _makeInt.fromBytes(_error)
                 if (pending.contains(error)):
-                    traceln(`AMP: ! $_error (error)`)
+                    # traceln(`AMP: ! $_error (error)`)
                     def [=> _error_description := "unknown error"] | _ := arguments
                     pending[error].smash(_error_description)
                     pending without= (error)
@@ -171,8 +171,8 @@ def makeAMP(sink, handler) as DeepFrozen:
 
         to send(command :Str, var arguments :Map, expectReply :Bool):
             return if (expectReply):
-                traceln(`AMP: ? $serial`)
-                traceln(`AMP: -> $command (send)`)
+                # traceln(`AMP: ? $serial`)
+                # traceln(`AMP: -> $command (send)`)
                 arguments |= ["_command" => command, "_ask" => `$serial`]
                 def resolver := def reply
                 pending |= [serial => resolver]
@@ -182,7 +182,7 @@ def makeAMP(sink, handler) as DeepFrozen:
             else:
                 # Send-only. (And there's no reply at all, no, there's no
                 # reply at all...) ~ C.
-                traceln(`AMP: -> $command (sendOnly)`)
+                # traceln(`AMP: -> $command (sendOnly)`)
                 sink<-(packAMPPacket(arguments))
                 null
 
@@ -256,7 +256,6 @@ def makeAMPPool(bootExpression :DeepFrozen, endpoint) as DeepFrozen:
         def ampCall(target, verb, arguments, namedArguments, => FAIL) {
             return when (target, deepFulfilled(arguments),
                          deepFulfilled(namedArguments)) -> {
-                traceln(`ampCall($target, $verb, $arguments, $namedArguments)`)
                 try {
                     def payload := JSON.encode([
                         => target,
@@ -292,7 +291,6 @@ def makeAMPPool(bootExpression :DeepFrozen, endpoint) as DeepFrozen:
 
         object makeProxy {
             to decode(json) {
-                traceln("decoding", json)
                 return switch (json) {
                     match xs :List { [for x in (xs) makeProxy.decode(x)] }
                     match xs :Map {
@@ -313,10 +311,8 @@ def makeAMPPool(bootExpression :DeepFrozen, endpoint) as DeepFrozen:
 
                 return object proxyHandler {
                     to handleSend(verb :Str, args :List, namedArgs :Map) {
-                        traceln("handling send", verb, args, namedArgs)
                         return switch ([verb, args]) {
                             match [=="_sealedDispatch", [b]] {
-                                traceln("sealed dispatch", b)
                                 when (b) -> {
                                     if (_equalizer.sameYet(b, refBrand)) {
                                         sealRef.seal(self)
@@ -326,7 +322,6 @@ def makeAMPPool(bootExpression :DeepFrozen, endpoint) as DeepFrozen:
                             match [=="_whenMoreResolved", [cb]] {
                                 # 'More resolved?' I am your proxy! I am the
                                 # most resolved you are *ever* gonna get!
-                                traceln("more resolved", cb)
                                 cb<-(proxyHandler)
                             }
                             match _ {
@@ -338,7 +333,6 @@ def makeAMPPool(bootExpression :DeepFrozen, endpoint) as DeepFrozen:
                                 def namedArgRefs := [for k => v in (namedArgs) ? (k != "FAIL") k => {
                                     unboxing(v)
                                 }]
-                                traceln("unboxed", argRefs, namedArgRefs)
                                 def rv := ampCall(self, verb,
                                                   argRefs, namedArgRefs)
                                 when (rv) -> { makeProxy.decode(rv) }

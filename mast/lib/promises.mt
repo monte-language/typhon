@@ -63,7 +63,6 @@ def makeLoadBalancingRef() as DeepFrozen:
             if (loads.isEmpty()):
                 throw(`Load balancer has no backends`)
             def [k, load] := loads.sortValues()._makeIterator().next(null)
-            traceln(`Load balancer delegating message [$verb, $args, $namedArgs] to backend $k (load $load)`)
             loads[k] += 1
             def rv := M.send(refs[k], verb, args, namedArgs)
             when (rv) ->

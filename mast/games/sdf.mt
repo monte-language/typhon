@@ -1,8 +1,12 @@
 import "lib/entropy/entropy" =~ [=> makeEntropy]
 import "lib/samplers" =~ [=> samplerConfig, => costOfConfig]
-import "lib/noise" =~ [=> makeSimplexNoise]
-import "lib/csg" =~ [=> CSG, => expandCSG, => asSDF, => costOfSolid, => drawSDF]
-import "lib/promises" =~ [=> makeSemaphoreRef]
+import "lib/csg" =~ [=> CSG, => expandCSG, => costOfSolid]
+import "lib/promises" =~ [=> makeSemaphoreRef, => makeLoadBalancingRef]
+import "lib/codec/utf8" =~ [=> UTF8]
+import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
+import "lib/monte/monte_parser" =~ [=> parseModule]
+import "lib/muffin" =~ [=> makeLimo]
+import "lib/amp" =~ [=> makeAMPPool]
 import "fun/png" =~ [=> makePNG]
 exports (main)
 
@@ -122,55 +126,121 @@ def morningstar :DeepFrozen := {
 # A poor blade of grass.
 def grass :DeepFrozen := CSG.Bend(CSG.Cylinder(2.0, 0.5, rubber(green)), 0.1)
 
-def traceToPNG(Timer, entropy, width :Int, height :Int, solid) as DeepFrozen:
+def maxWorkers :Int := 3
+
+def copyCSGTo(ref) as DeepFrozen:
+    return object copier:
+        match [verb, args, namedArgs]:
+            M.send(ref, verb, args, namedArgs)
+
+def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool) as DeepFrozen:
     traceln(`Tracing solid: $solid`)
-    traceln(`Cost: ${solid(costOfSolid)}`)
-    # Prepare some noise. lib/noise explains how to do this.
-    def indices := entropy.shuffle(_makeList.fromIterable(0..!(2 ** 10)))
-    def noise := makeSimplexNoise.fromShuffledIndices(indices)
-    def sdf := solid(asSDF(noise))
-    # Rate-limit the amount of enqueued work.
-    # XXX dynamically discover this; should be 2 * workers + 1
-    def maxWorkers :Int := 3
-    def [drawable, activeWorkers] := makeSemaphoreRef(drawSDF(sdf), maxWorkers)
     # def config := samplerConfig.QuasirandomMonteCarlo(3)
     def config := samplerConfig.Center()
     def cost := config(costOfConfig) * solid(costOfSolid) * width * height
-    def drawer := makePNG.drawingFrom(drawable, config)(width, height)
-    def start := Timer.unsafeNow()
-    var i := 0
-    # NB: There are other ways to do this recursion, but we're trying to avoid
-    # a Typhon implementation issue where thousands of chained promises can
-    # resolve in a way which causes a stack overflow.
-    def doneResolver := def done
-    def go():
-        def p := escape ej { drawer.next(ej) } catch _ {
-            doneResolver.resolveRace(null)
-            return
+    traceln(`Cost: $cost (log-cost: ${cost.asDouble().logarithm()}`)
+    # Prepare some noise. lib/noise explains how to do this.
+    def indices := entropy.shuffle(_makeList.fromIterable(0..!(2 ** 10)))
+
+    # Set up our work delegation: Messages go first to a rate-limiting
+    # semaphore, and then to the worker backends via load-balancing.
+    def [workerRef, addWorkerRef] := makeLoadBalancingRef()
+    # Rate-limit the amount of enqueued work.
+    # XXX dynamically discover this; should be 2 * workers + 1
+    def [drawableRef, activeWorkers] := makeSemaphoreRef(workerRef, maxWorkers)
+    def drawer := makePNG.drawingFrom(drawableRef, config)(width, height)
+
+    # Wait for somebody to connect. When they connect, set them up and add
+    # them to the load balancer.
+    def readyResolver := def ready
+    pool.whenClient(fn module {
+        traceln(`Pool $pool whenClient module $module`)
+        def remoteSolid := solid(copyCSGTo(module["CSG"]))
+        def remoteNoise := module["makeSimplexNoise"]<-fromShuffledIndices(indices)
+        def remoteSDF := remoteSolid<-(module["asSDF"]<-(remoteNoise))
+        def remoteDrawable := module["drawSDF"]<-(remoteSDF)
+        when (remoteDrawable) -> {
+            traceln(`Built remote drawable $remoteDrawable`)
+            addWorkerRef(remoteDrawable)
+            readyResolver.resolveRace(null)
+        } catch problem {
+            traceln(`Problem setting up client: $problem`)
         }
+    })
 
-        return when (p) ->
+    traceln("Waiting for workers to connect…")
+    return when (ready) ->
+        traceln("Got workers, starting work!")
+        def start := Timer.unsafeNow()
+        var i := 0
+        # NB: There are other ways to do this recursion, but we're trying to avoid
+        # a Typhon implementation issue where thousands of chained promises can
+        # resolve in a way which causes a stack overflow.
+        def doneResolver := def done
+        def go():
+            def p := escape ej { drawer.next(ej) } catch _ {
+                doneResolver.resolveRace(null)
+                return
+            }
+
+            return when (p) ->
+                go<-()
+                i += 1
+                if (i % 2000 == 0):
+                    def duration := Timer.unsafeNow() - start
+                    def pixelsPerSecond := i / duration
+                    def timeRemaining := ((width * height) - i) / pixelsPerSecond
+                    def normPixels := `(${(pixelsPerSecond * cost).logarithm()} work/s)`
+                    def workerStatus := `(${activeWorkers()}/$maxWorkers working)`
+                    traceln(`Status: ${(i * 100) / (width * height)}% ($pixelsPerSecond px/s) $workerStatus $normPixels (${timeRemaining}s left)`)
+        # Feed each worker.
+        for _ in (0..!maxWorkers):
             go<-()
-            i += 1
-            if (i % 2000 == 0):
-                def duration := Timer.unsafeNow() - start
-                def pixelsPerSecond := i / duration
-                def timeRemaining := ((width * height) - i) / pixelsPerSecond
-                def normPixels := `(${(pixelsPerSecond * cost).logarithm()} work/s)`
-                def workerStatus := `(${activeWorkers()}/$maxWorkers working)`
-                traceln(`Status: ${(i * 100) / (width * height)}% ($pixelsPerSecond px/s) $workerStatus $normPixels (${timeRemaining}s left)`)
-    # Kick off the workers with the desired parallelism.
-    for _ in (0..!maxWorkers):
-        go<-()
-    return when (done) ->
-        drawer.finish()
+        when (done) ->
+            drawer.finish()
 
-def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
+# XXX cribbed from tools/repl, craves to share code with montec
+
+def makeFileLoader(root :Str, makeFileResource) as DeepFrozen:
+    return def load(petname :Str):
+        def path := `$root/$petname.mt`
+        def bs := makeFileResource(path)<-getContents()
+        return when (bs) ->
+            escape ej:
+                def source := UTF8.decode(bs, ej)
+                def lex := makeMonteLexer(source, petname)
+                [source, parseModule(lex, astBuilder, ej)]
+            catch parseProblem:
+                traceln(`Had trouble loading module: $parseProblem`)
+                throw(parseProblem)
+
+def getBootMuffin(makeFileResource) as DeepFrozen:
+    def basePath :Str := "mast"
+    def petname :Str := "lib/csg"
+    def loader := makeFileLoader(basePath, makeFileResource)
+    def limo := makeLimo(loader)
+    return when (def p := loader(petname)) ->
+        def [source :NullOk[Str], expr] := p
+        limo(petname, source, expr)
+    catch problem:
+        traceln.exception(problem)
+        throw(problem)
+
+def port :Int := 9876
+
+def main(_argv,
+         => currentRuntime, => makeFileResource, => Timer,
+         => makeTCP4ServerEndpoint) as DeepFrozen:
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
-    def solid := sines(expandCSG)
+    def ep := makeTCP4ServerEndpoint(port)
     def w := 640
     def h := 360
-    def png := traceToPNG(Timer, entropy, w, h, solid)
-    return when (png) ->
-        traceln(`Created PNG of ${png.size()}b`)
-        when (makeFileResource("sdf.png")<-setContents(png)) -> { 0 }
+    def solid := sines(expandCSG)
+    def muffin := getBootMuffin(makeFileResource)
+    return when (muffin) ->
+        traceln("Got boot muffin")
+        def pool := makeAMPPool(muffin, ep)
+        def png := traceToPNG(Timer, entropy, w, h, solid, pool)
+        when (png) ->
+            traceln(`Created PNG of ${png.size()}b`)
+            when (makeFileResource("sdf.png")<-setContents(png)) -> { 0 }

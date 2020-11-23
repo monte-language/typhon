@@ -2,7 +2,7 @@ import "lib/asdl" =~ [=> buildASDLModule]
 import "lib/colors" =~ [=> makeColor]
 import "lib/noise" =~ [=> makeSimplexNoise]
 import "lib/vectors" =~ [=> V, => glsl]
-exports (CSG, expandCSG, asSDF, costOfSolid, drawSDF)
+exports (CSG, expandCSG, asSDF, costOfSolid, drawSDF, makeSimplexNoise)
 
 # http://jamie-wong.com/2016/07/15/ray-marching-signed-distance-functions/
 # https://erleuchtet.org/~cupe/permanent/enhanced_sphere_tracing.pdf

@@ -78,12 +78,12 @@ def makeVamp() as DeepFrozen:
                          => verb :Str,
                          => arguments :List,
                          => namedArguments :Map] exit badCall := unserialized
-                    traceln("call", target, verb, arguments, namedArguments)
+                    # traceln("call", target, verb, arguments, namedArguments)
                     try:
                         def rv := M.call(target, verb, arguments, namedArguments)
-                        traceln("call result", rv)
+                        # traceln("call result", rv)
                         def serialized := JSON.encode(surgeon.serialize(rv), FAIL)
-                        traceln("serialized", serialized)
+                        # traceln("serialized", serialized)
                         ["result" => serialized]
                     catch problem:
                         traceln("call problem", problem)

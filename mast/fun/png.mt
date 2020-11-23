@@ -144,11 +144,14 @@ object makePNG as DeepFrozen:
                     def address := addressOf(w, h)
 
                     def color := discreteSampler.pixelAt(w, h)
-                    return when (color) ->
+                    # NB: lib/colors returns List[Double] here; we have to
+                    # wait for it, but it should be near once resolved.
+                    def srgb := color<-sRGB()
+                    return when (srgb) ->
                         # Kludge: Color is premultiplied, but PNG stores colors
                         # unpremultiplied. Fortunately, alpha is a Double and we
                         # can recover the original color with negligible loss.
-                        def [r, g, b, a] := color.sRGB()
+                        def [r, g, b, a] := srgb
                         # Don't divide by zero; it'll NaN. Instead, think: If
                         # alpha is zero, then we can pick an arbitrary color.
                         # The PNG specification asks that we pick black, which is
