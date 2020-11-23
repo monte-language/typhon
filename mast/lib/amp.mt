@@ -229,6 +229,10 @@ def makeAMPPool(bootExpression :DeepFrozen, endpoint) as DeepFrozen:
 
     var clientId :Int := 0
     def clients := [].asMap().diverge()
+    def callbacks := [].asSet().diverge()
+    def runCallbacks(proxy):
+        for cb in (callbacks):
+            cb<-(proxy)
 
     endpoint.listenStream(fn source, sink {
         def client :Int := clientId += 1
@@ -370,14 +374,15 @@ def makeAMPPool(bootExpression :DeepFrozen, endpoint) as DeepFrozen:
         clients[client] := when (root) -> {
             traceln(`Pool client $client: Booted root $root`)
             def ["value" => bootRef] := root
-            makeProxy.decode(JSON.decode(bootRef, null))
+            def proxy := makeProxy.decode(JSON.decode(bootRef, null))
+            runCallbacks<-(proxy)
+            proxy
         }
 
         flow(source, amp.sink())
     })
 
-    return object poolController:
-        match [verb, args, namedArgs]:
-            promiseAllFulfilled([for client in (clients) {
-                M.send(client, verb, args, namedArgs)
-            }])
+    return def poolController.whenClient(cb):
+        callbacks.include(cb)
+        for proxy in (clients):
+            cb<-(proxy)
