@@ -6,6 +6,8 @@ import "lib/codec/utf8" =~ [=> UTF8]
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
 import "lib/monte/monte_parser" =~ [=> parseModule]
 import "lib/muffin" =~ [=> makeLimo]
+import "lib/noise" =~ [=> makeSimplexNoise]
+import "lib/csg" =~ [=> asSDF, => drawSDF]
 import "lib/amp" =~ [=> makeAMPPool]
 import "fun/png" =~ [=> makePNG]
 exports (main)
@@ -126,7 +128,7 @@ def morningstar :DeepFrozen := {
 # A poor blade of grass.
 def grass :DeepFrozen := CSG.Bend(CSG.Cylinder(2.0, 0.5, rubber(green)), 0.1)
 
-def maxWorkers :Int := 3
+def maxWorkers :Int := 9
 
 def copyCSGTo(ref) as DeepFrozen:
     return object copier:
@@ -138,7 +140,7 @@ def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool) as DeepFroz
     # def config := samplerConfig.QuasirandomMonteCarlo(3)
     def config := samplerConfig.Center()
     def cost := config(costOfConfig) * solid(costOfSolid) * width * height
-    traceln(`Cost: $cost (log-cost: ${cost.asDouble().logarithm()}`)
+    traceln(`Cost: $cost (log-cost: ${cost.asDouble().logarithm()})`)
     # Prepare some noise. lib/noise explains how to do this.
     def indices := entropy.shuffle(_makeList.fromIterable(0..!(2 ** 10)))
 
@@ -147,7 +149,7 @@ def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool) as DeepFroz
     def [workerRef, addWorkerRef] := makeLoadBalancingRef()
     # Rate-limit the amount of enqueued work.
     # XXX dynamically discover this; should be 2 * workers + 1
-    def [drawableRef, activeWorkers] := makeSemaphoreRef(workerRef, maxWorkers)
+    def [drawableRef, activeWorkers, queuedWork] := makeSemaphoreRef(workerRef, maxWorkers)
     def drawer := makePNG.drawingFrom(drawableRef, config)(width, height)
 
     # Wait for somebody to connect. When they connect, set them up and add
@@ -168,6 +170,11 @@ def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool) as DeepFroz
         }
     })
 
+    # XXX local drawing is still far faster than ~3 workers in parallel
+    def localDrawable := drawSDF(solid(asSDF(makeSimplexNoise.fromShuffledIndices(indices))))
+    addWorkerRef(localDrawable)
+    readyResolver.resolveRace(null)
+
     traceln("Waiting for workers to connect…")
     return when (ready) ->
         traceln("Got workers, starting work!")
@@ -183,7 +190,7 @@ def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool) as DeepFroz
                 return
             }
 
-            return when (p) ->
+            when (p) ->
                 go<-()
                 i += 1
                 if (i % 2000 == 0):
@@ -191,8 +198,8 @@ def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool) as DeepFroz
                     def pixelsPerSecond := i / duration
                     def timeRemaining := ((width * height) - i) / pixelsPerSecond
                     def normPixels := `(${(pixelsPerSecond * cost).logarithm()} work/s)`
-                    def workerStatus := `(${activeWorkers()}/$maxWorkers working)`
-                    traceln(`Status: ${(i * 100) / (width * height)}% ($pixelsPerSecond px/s) $workerStatus $normPixels (${timeRemaining}s left)`)
+                    def workerStatus := `(${activeWorkers()}/$maxWorkers working, ${queuedWork()} queued)`
+                    traceln(`Status: ${(i * 100) / (width * height)}% ($pixelsPerSecond px/s) $normPixels $workerStatus (${timeRemaining}s left)`)
         # Feed each worker.
         for _ in (0..!maxWorkers):
             go<-()
@@ -235,10 +242,11 @@ def main(_argv,
     def ep := makeTCP4ServerEndpoint(port)
     def w := 640
     def h := 360
-    def solid := sines(expandCSG)
+    def solid := study(expandCSG)
     def muffin := getBootMuffin(makeFileResource)
+    traceln("Waiting for boot muffin…")
     return when (muffin) ->
-        traceln("Got boot muffin")
+        traceln("Got boot muffin!")
         def pool := makeAMPPool(muffin, ep)
         def png := traceToPNG(Timer, entropy, w, h, solid, pool)
         when (png) ->

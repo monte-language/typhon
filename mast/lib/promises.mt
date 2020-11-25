@@ -11,8 +11,8 @@ def makeSemaphoreRef(ref, size :(Int > 0)) as DeepFrozen:
     messages are sent to the forwarder, it will wait for at least one
     forwarded message to resolve before sending another.
 
-    The return kit `[semaphoreRef, active]` includes a getter for the number
-    of active messages.
+    The return kit `[semaphoreRef, active, queued]` includes getters for the
+    number of active and queued messages.
     "
 
     var active :(0..size) := 0
@@ -43,7 +43,7 @@ def makeSemaphoreRef(ref, size :(Int > 0)) as DeepFrozen:
                 queue with= ([resolver, verb, args, namedArgs])
                 promise
 
-    return [semaphoreRef, &active.get]
+    return [semaphoreRef, &active.get, fn { queue.size() }]
 
 def makeLoadBalancingRef() as DeepFrozen:
     "

@@ -213,7 +213,6 @@ def deepFulfilled(p) as DeepFrozen:
             p
 
 
-
 def makeAMPPool(bootExpression :DeepFrozen, endpoint) as DeepFrozen:
     "
     Make an AMP server which receives connections from worker clients and
@@ -280,12 +279,17 @@ def makeAMPPool(bootExpression :DeepFrozen, endpoint) as DeepFrozen:
 
         def [sealRef, unsealRef] := makeBrandPair("AMP proxy")
         def refBrand := sealRef.getBrand()
-        def unboxing(x) {
-            def box := x<-_sealedDispatch(refBrand)
-            return when (box) -> {
-                escape ej {
-                    unsealRef.unsealing(box, ej)
-                } catch _ { x }
+        def unboxing(arg) {
+            return switch (arg) {
+                match xs :List { [for x in (xs) unboxing(x)] }
+                match _ {
+                    def box := arg<-_sealedDispatch(refBrand)
+                    return when (box) -> {
+                        escape ej {
+                            unsealRef.unsealing(box, ej)
+                        } catch _ { arg }
+                    }
+                }
             }
         }
 
