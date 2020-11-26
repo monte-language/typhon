@@ -9,6 +9,9 @@ import "lib/muffin" =~ [=> makeLimo]
 import "lib/noise" =~ [=> makeSimplexNoise]
 import "lib/csg" =~ [=> asSDF, => drawSDF]
 import "lib/amp" =~ [=> makeAMPPool]
+import "lib/which" =~ [=> makePathSearcher, => makeWhich]
+import "lib/nproc" =~ [=> getNumberOfProcessors]
+import "lib/vamp" =~ [=> makeVampEndpoint]
 import "fun/png" =~ [=> makePNG]
 exports (main)
 
@@ -128,14 +131,12 @@ def morningstar :DeepFrozen := {
 # A poor blade of grass.
 def grass :DeepFrozen := CSG.Bend(CSG.Cylinder(2.0, 0.5, rubber(green)), 0.1)
 
-def maxWorkers :Int := 9
-
 def copyCSGTo(ref) as DeepFrozen:
     return object copier:
         match [verb, args, namedArgs]:
             M.send(ref, verb, args, namedArgs)
 
-def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool) as DeepFrozen:
+def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool, nproc) as DeepFrozen:
     traceln(`Tracing solid: $solid`)
     # def config := samplerConfig.QuasirandomMonteCarlo(3)
     def config := samplerConfig.Center()
@@ -149,7 +150,7 @@ def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool) as DeepFroz
     def [workerRef, addWorkerRef] := makeLoadBalancingRef()
     # Rate-limit the amount of enqueued work.
     # XXX dynamically discover this; should be 2 * workers + 1
-    def [drawableRef, activeWorkers, queuedWork] := makeSemaphoreRef(workerRef, maxWorkers)
+    def [drawableRef, activeWorkers, queuedWork] := makeSemaphoreRef(workerRef, nproc)
     def drawer := makePNG.drawingFrom(drawableRef, config)(width, height)
 
     # Wait for somebody to connect. When they connect, set them up and add
@@ -171,9 +172,9 @@ def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool) as DeepFroz
     })
 
     # XXX local drawing is still far faster than ~3 workers in parallel
-    def localDrawable := drawSDF(solid(asSDF(makeSimplexNoise.fromShuffledIndices(indices))))
-    addWorkerRef(localDrawable)
-    readyResolver.resolveRace(null)
+    # def localDrawable := drawSDF(solid(asSDF(makeSimplexNoise.fromShuffledIndices(indices))))
+    # addWorkerRef(localDrawable)
+    # readyResolver.resolveRace(null)
 
     traceln("Waiting for workers to connect…")
     return when (ready) ->
@@ -198,10 +199,10 @@ def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool) as DeepFroz
                     def pixelsPerSecond := i / duration
                     def timeRemaining := ((width * height) - i) / pixelsPerSecond
                     def normPixels := `(${(pixelsPerSecond * cost).logarithm()} work/s)`
-                    def workerStatus := `(${activeWorkers()}/$maxWorkers working, ${queuedWork()} queued)`
+                    def workerStatus := `(${activeWorkers()}/$nproc working, ${queuedWork()} queued)`
                     traceln(`Status: ${(i * 100) / (width * height)}% ($pixelsPerSecond px/s) $normPixels $workerStatus (${timeRemaining}s left)`)
         # Feed each worker.
-        for _ in (0..!maxWorkers):
+        for _ in (0..!nproc):
             go<-()
         when (done) ->
             drawer.finish()
@@ -236,19 +237,31 @@ def getBootMuffin(makeFileResource) as DeepFrozen:
 def port :Int := 9876
 
 def main(_argv,
-         => currentRuntime, => makeFileResource, => Timer,
+         => currentProcess, => makeProcess,
+         => currentRuntime,
+         => makeFileResource,
+         => Timer,
          => makeTCP4ServerEndpoint) as DeepFrozen:
+    currentRuntime.getConfiguration().setLoggingTags([b`serious`, b`process`])
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
     def ep := makeTCP4ServerEndpoint(port)
+    def vp := makeVampEndpoint(currentProcess, makeProcess, b`127.0.0.1`, port)
     def w := 640
     def h := 360
     def solid := study(expandCSG)
     def muffin := getBootMuffin(makeFileResource)
+    def which := makeWhich(makeProcess,
+                           makePathSearcher(makeFileResource,
+                                            currentProcess.getEnvironment()[b`PATH`]))
+    def nproc := getNumberOfProcessors(which("nproc"))
     traceln("Waiting for boot muffin…")
     return when (muffin) ->
         traceln("Got boot muffin!")
         def pool := makeAMPPool(muffin, ep)
-        def png := traceToPNG(Timer, entropy, w, h, solid, pool)
-        when (png) ->
-            traceln(`Created PNG of ${png.size()}b`)
-            when (makeFileResource("sdf.png")<-setContents(png)) -> { 0 }
+        when (pool, nproc) ->
+            traceln(`Pool is ready, starting $nproc workers…`)
+            vp.connectWorkers(nproc)
+            def png := traceToPNG(Timer, entropy, w, h, solid, pool, nproc)
+            when (png) ->
+                traceln(`Created PNG of ${png.size()}b`)
+                when (makeFileResource("sdf.png")<-setContents(png)) -> { 0 }
