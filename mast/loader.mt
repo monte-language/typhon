@@ -43,8 +43,10 @@ def ModuleStructure :DeepFrozen := Pair[Map[Str, Map[Str, Any]], NullOk[Config]]
 def bytesToStr(bs :Bytes) :Str as DeepFrozen:
     return _makeStr.fromChars([for i in (bs) '\x00' + i])
 
-def loaderMain() :Vow[Int]:
+def loaderMain(args :List[Str]) :Vow[Int]:
     "Run the thing and return the status code."
+
+    traceln(`Loader args: $args`)
 
     def collectedTests := [].diverge()
     def collectedBenches := [].diverge()
@@ -128,8 +130,6 @@ def loaderMain() :Vow[Int]:
             def [[(modname) => module], config] := (moduleAndConfig :ModuleStructure)
             [module, config]
 
-    var args := [for arg in (currentProcess.getArguments().slice(2)) bytesToStr(arg)]
-    traceln(`Loader args: $args`)
     def usage := "Usage: loader run <modname> <args> | loader test <modname>"
     if (args.size() < 1):
         throw(usage)
@@ -200,6 +200,7 @@ def loaderMain() :Vow[Int]:
 
         match _:
             throw(usage)
-def exitStatus := loaderMain()
+# These args come from Typhon's unsafe scope.
+def exitStatus := loaderMain(typhonArgs)
 Ref.whenBroken(exitStatus, fn x {traceln.exception(Ref.optProblem(x)); 1})
 exitStatus

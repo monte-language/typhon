@@ -23,8 +23,10 @@ FLOWTO_1 = getAtom(u"flowTo", 1)
 RUN_3 = getAtom(u"run", 3)
 
 
-def makeCurrentProcess(config):
-    argv = [BytesObject(arg) for arg in config.argv]
+def makeCurrentProcess(argv):
+    # NB: These are the true argv, not the version in `typhonArgs` provided to
+    # the loader.
+    argv = [BytesObject(arg) for arg in argv]
 
     # Pull envp via os.environ and pack it into a map. Also, destroy each key
     # after pulling it, which will cause RPython to either setenv(key, NULL)

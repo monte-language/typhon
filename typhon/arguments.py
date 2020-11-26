@@ -62,7 +62,7 @@ class Configuration(object):
 
     def __init__(self, argv):
         # Arguments not consumed by Typhon. Will be available to the main
-        # script.
+        # script as `typhonArgs`.
         self.argv = []
 
         # The paths from which to draw imports and the prelude.

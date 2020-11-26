@@ -48,13 +48,17 @@ class FindTyphonFile(Object):
         return NullObject
 
 
-def unsafeScope(config):
+def unsafeScope(argv, config):
+    from typhon.objects.collections.lists import wrapList
     return finalize({
         u"Timer": Timer(),
         u"bench": bench(),
-        u"currentProcess": makeCurrentProcess(config),
+        u"currentProcess": makeCurrentProcess(argv),
         u"currentRuntime": CurrentRuntime(config),
         u"_findTyphonFile": FindTyphonFile(config.libraryPaths),
+        # NB: These are the correct args to give to the loader.
+        u"typhonArgs": wrapList([StrObject(arg.decode("utf-8"))
+                                 for arg in config.argv[2:]]),
         u"getAddrInfo": getAddrInfo(),
         u"makeFileResource": makeFileResource(),
         u"makeProcess": makeProcess(),

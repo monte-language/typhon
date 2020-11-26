@@ -224,7 +224,7 @@ def runTyphon(argv):
     ss[u"safeScope"] = finalBinding(ConstMap(reflectedSS), deepFrozenGuard)
     reflectedSS[StrObject(u"&&safeScope")] = ss[u"safeScope"]
     scope[u"safeScope"] = ss[u"safeScope"]
-    scope.update(unsafeScope(config))
+    scope.update(unsafeScope(argv, config))
     # The initial vat is included as `currentVat` to the first level of
     # loading and such.
     scope[u"currentVat"] = finalBinding(vat, anyGuard)
