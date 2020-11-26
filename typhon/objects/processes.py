@@ -37,7 +37,11 @@ def makeCurrentProcess(config):
         env[k] = v
         del os.environ[key]
 
-    return CurrentProcess(os.getpid(), argv, env)
+    # Linux-specific trick for getting the current executable. Is there a more
+    # portable way? libuv doesn't have one.
+    exe = os.readlink("/proc/self/exe")
+
+    return CurrentProcess(os.getpid(), exe, argv, env)
 
 @autohelp
 class CurrentProcess(Object):
@@ -45,13 +49,22 @@ class CurrentProcess(Object):
     The current process on the local node.
     """
 
-    def __init__(self, pid, argv, env):
+    def __init__(self, pid, exe, argv, env):
         self.pid = pid
+        self.exe = exe
         self.argv = argv
         self.env = env
 
     def toString(self):
         return u"<current process (PID %d)>" % self.pid
+
+    @method("Int")
+    def getProcessID(self):
+        return self.pid
+
+    @method("Bytes")
+    def getExecutable(self):
+        return self.exe
 
     @method("List")
     def getArguments(self):
@@ -60,10 +73,6 @@ class CurrentProcess(Object):
     @method("Map")
     def getEnvironment(self):
         return self.env
-
-    @method("Int")
-    def getPID(self):
-        return self.pid
 
     @method("Void")
     def interrupt(self):
@@ -104,9 +113,11 @@ class SubProcess(Object):
     EMPTY_PID = -1
     EMPTY_EXIT_AND_SIGNAL = (-1, -1)
 
-    def __init__(self, vat, process, argv, env, stdin, stdout, stderr):
+    def __init__(self, vat, process, executable, argv, env, stdin, stdout,
+                 stderr):
         self.pid = self.EMPTY_PID
         self.process = process
+        self.executable = executable
         self.argv = argv
         self.env = env
         self.exit_and_signal = self.EMPTY_EXIT_AND_SIGNAL
@@ -141,6 +152,14 @@ class SubProcess(Object):
             return u"<child process (unspawned)>"
         return u"<child process (PID %d)>" % self.pid
 
+    @method("Int")
+    def getProcessID(self):
+        return self.pid
+
+    @method("Bytes")
+    def getExecutable(self):
+        return self.executable
+
     @method("List")
     def getArguments(self):
         return [BytesObject(arg) for arg in self.argv]
@@ -154,10 +173,6 @@ class SubProcess(Object):
             v = BytesObject(value)
             d[k] = v
         return d
-
-    @method("Int")
-    def getPID(self):
-        return self.pid
 
     @method("Void")
     def interrupt(self):
@@ -254,8 +269,9 @@ class makeProcess(Object):
 
         try:
             process = ruv.allocProcess()
-            sub = SubProcess(vat, process, argv, env, stdin=stdinSink,
-                             stdout=stdoutSource, stderr=stderrSource)
+            sub = SubProcess(vat, process, executable, argv, env,
+                             stdin=stdinSink, stdout=stdoutSource,
+                             stderr=stderrSource)
             vat.enqueueEvent(SpawnProcessIOEvent(
                 vat, sub, process, executable, argv, packedEnv, streams))
             return sub
