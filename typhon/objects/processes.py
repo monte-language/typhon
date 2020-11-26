@@ -24,7 +24,7 @@ RUN_3 = getAtom(u"run", 3)
 
 
 def makeCurrentProcess(config):
-    argv = [StrObject(arg.decode("utf-8")) for arg in config.argv]
+    argv = [BytesObject(arg) for arg in config.argv]
 
     # Pull envp via os.environ and pack it into a map. Also, destroy each key
     # after pulling it, which will cause RPython to either setenv(key, NULL)

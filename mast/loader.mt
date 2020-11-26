@@ -40,6 +40,9 @@ def makeModuleConfiguration(module :DeepFrozen,
 
 def ModuleStructure :DeepFrozen := Pair[Map[Str, Map[Str, Any]], NullOk[Config]]
 
+def bytesToStr(bs :Bytes) :Str as DeepFrozen:
+    return _makeStr.fromChars([for i in (bs) '\x00' + i])
+
 def loaderMain() :Vow[Int]:
     "Run the thing and return the status code."
 
@@ -125,7 +128,7 @@ def loaderMain() :Vow[Int]:
             def [[(modname) => module], config] := (moduleAndConfig :ModuleStructure)
             [module, config]
 
-    var args := currentProcess.getArguments().slice(2)
+    var args := [for arg in (currentProcess.getArguments().slice(2)) bytesToStr(arg)]
     traceln(`Loader args: $args`)
     def usage := "Usage: loader run <modname> <args> | loader test <modname>"
     if (args.size() < 1):
