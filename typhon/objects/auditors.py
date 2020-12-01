@@ -103,7 +103,7 @@ class SemitransparentStamp(Object):
     auditor alone.  This allows for structural equality and DeepFrozen auditing
     of objects that attenuate authority. (If, in future, other objects need to
     inspect Semitransparent object structure, an unsealer can be added to the
-    unsafe scope.)
+    entrypoint capabilities.)
     """
     def computeHash(self, depth):
         return compute_identity_hash(self)

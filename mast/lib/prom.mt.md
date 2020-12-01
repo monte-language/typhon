@@ -527,8 +527,8 @@ We'll offer a named argument.
 > * `set_to_current_time()`: Set the gauge to the current unixtime in seconds.
 
 And the first "SHOULD" that must be ignored has arrived. In Monte, the system
-timer is closely-held in the unsafe scope, which means that ordinary
-user-level code cannot get at it.
+timer is closely-held as an entrypoint capability, which means that ordinary
+user-level code cannot get at it unless the entrypoint gave it to them.
 
 > A gauge is ENCOURAGED to have:
 > 
@@ -762,8 +762,8 @@ establish some cultural expectations.
 > the default CollectorRegistry. There SHOULD be a way to disable these, as there
 > are some very niche use cases where they get in the way.
 
-The desired metrics are extremely unsafe, and not part of standard Monte. We
-can export some of them if we are given the requisite unsafe objects.
+The desired metrics are not part of standard Monte. We can export some of them
+if we are given the requisite entrypoint capabilities.
 
 > ### Process metrics
 > 
