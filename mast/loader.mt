@@ -46,7 +46,7 @@ def bytesToStr(bs :Bytes) :Str as DeepFrozen:
 def loaderMain(args :List[Str]) :Vow[Int]:
     "Run the thing and return the status code."
 
-    traceln(`Loader args: $args`)
+    # traceln(`Loader args: $args`)
 
     def collectedTests := [].diverge()
     def collectedBenches := [].diverge()
@@ -65,7 +65,6 @@ def loaderMain(args :List[Str]) :Vow[Int]:
 
 
     def makeModuleAndConfiguration(modname,
-                                   newReader,
                                    => collectTests := false,
                                    => collectBenchmarks := false):
         def depMap := [].asMap().diverge()
@@ -84,17 +83,15 @@ def loaderMain(args :List[Str]) :Vow[Int]:
             def fname := _findTyphonFile(modname)
             if (fname == null):
                 throw(`Unable to locate $modname`)
+
+            # traceln(`subload($modname)`)
             def loadModuleFile():
                 def code := makeFileResource(fname).getContents()
                 return when (code) ->
                     try:
-                        def modObj := if (newReader) {
-                            typhonAstEval(normalize(readMAST(code), typhonAstBuilder),
-                                          safeScope, fname)
-                        } else {
-                            astEval.evalToPair(code, safeScope,
-                                               "filename" => fname)[0]
-                        }
+                        def modObj := typhonAstEval(normalize(readMAST(code),
+                                                              typhonAstBuilder),
+                                                    safeScope, fname)
                         depMap[modname] := makeModuleConfiguration(modObj, [].asMap())
                     catch problem:
                         traceln(`Unable to eval file ${M.toQuote(fname)}`)
@@ -130,17 +127,13 @@ def loaderMain(args :List[Str]) :Vow[Int]:
             def [[(modname) => module], config] := (moduleAndConfig :ModuleStructure)
             [module, config]
 
-    def usage := "Usage: loader run <modname> <args> | loader test <modname>"
+    def usage := "Usage: loader run <modname> <args> | loader test <modname> | loader dot <modname> | loader bench <modname>"
     if (args.size() < 1):
         throw(usage)
-    def newReader := args[0] == "-anf"
-    if (newReader):
-        args := args.slice(1)
 
     return switch (args):
         match [=="run", modname] + subargs:
-            traceln(`Loading $modname`)
-            def exps := makeModuleAndConfiguration(modname, newReader)
+            def exps := makeModuleAndConfiguration(modname)
             when (exps) ->
                 def [module, _] := exps
                 def excludes := ["typhonEval", "_findTyphonFile", "bench"]
@@ -155,7 +148,7 @@ def loaderMain(args :List[Str]) :Vow[Int]:
                 M.call(main, "run", [subargs], unsafeScopeValues)
         match [=="dot", modname] + _subargs:
             def stdout := stdio.stdout()
-            def exps := makeModuleAndConfiguration(modname, newReader)
+            def exps := makeModuleAndConfiguration(modname)
             when (exps) ->
                 # We only care about the config.
                 def [_, topConfig] := exps
@@ -177,9 +170,8 @@ def loaderMain(args :List[Str]) :Vow[Int]:
             def someMods := promiseAllFulfilled(
                 [for modname in (modnames)
                  makeModuleAndConfiguration(modname,
-                                            newReader,
                                             "collectTests" => true)] +
-                [def testRunner := makeModuleAndConfiguration("testRunner", newReader)])
+                [def testRunner := makeModuleAndConfiguration("testRunner")])
             when (someMods) ->
                 def [[=> makeRunner] | _, _] := testRunner
                 def runner := makeRunner(stdio, unsealException, Timer)
@@ -188,7 +180,6 @@ def loaderMain(args :List[Str]) :Vow[Int]:
             def someMods := promiseAllFulfilled(
                 [for modname in (modnames)
                  makeModuleAndConfiguration(modname,
-                                            newReader,
                                             "collectBenchmarks" => true)] +
                 [(def benchRunner := makeModuleAndConfiguration("benchRunner"))])
             return when (someMods) ->
