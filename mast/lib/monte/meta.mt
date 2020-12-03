@@ -287,7 +287,7 @@ def main(argv :List[Str], =>makeFileResource) as DeepFrozen:
                 traceln("got source")
                 go(parseModule(src))  # not so fast, buster! see #153
             catch oops:
-                trace.exception(oops)
+                traceln.exception(oops)
             done += 2
         else if (todo =~ [src] + _):
             go(::"m``".fromStr(src))

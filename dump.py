@@ -20,7 +20,7 @@ safeScopeNames = [
     u"__slotToBinding", u"_auditedBy", u"_equalizer", u"_loop", u"_makeBytes",
     u"_makeDouble", u"_makeFinalSlot", u"_makeInt", u"_makeList", u"_makeMap",
     u"_makeSourceSpan", u"_makeVarSlot", u"_slotToBinding",
-    u"throw", u"trace", u"traceln", u"Comparison", u"Comparable", u"WellOrdered",
+    u"throw", u"traceln", u"Comparison", u"Comparable", u"WellOrdered",
     u"Void", u"Bool", u"Bytes", u"Char", u"Double", u"Int", u"Str",
     u"_makeOrderedSpace", u"Empty", u"List", u"Map", u"NullOk", u"Pair",
     u"Set", u"Vow", u"_mapEmpty", u"_mapExtract", u"_accumulateList",

@@ -795,7 +795,7 @@ def scopeNames := [
     => _makeList, => _makeMap, => _makeInt, => _makeDouble,
     => _makeSourceSpan, => _makeStr, => _slotToBinding,
     => _makeBytes, => _makeFinalSlot, => _makeVarSlot,
-    => throw, => trace, => traceln,
+    => throw, => traceln,
     => _mapEmpty, => _mapExtract,
     => _accumulateList, => _accumulateMap, => _booleanFlow, => _iterForever,
     => _switchFailed, => _makeVerbFacet, => _comparer, => _suchThat,

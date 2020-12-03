@@ -374,6 +374,5 @@ def safeScope():
         u"_slotToBinding": theSlotBinder,
         u"throw": theThrower,
 
-        u"trace": TraceLn(),
         u"traceln": TraceLn(),
     })
