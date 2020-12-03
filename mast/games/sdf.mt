@@ -172,9 +172,9 @@ def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool, nproc) as D
     })
 
     # XXX local drawing is still far faster than ~3 workers in parallel
-    # def localDrawable := drawSDF(solid(asSDF(makeSimplexNoise.fromShuffledIndices(indices))))
-    # addWorkerRef(localDrawable)
-    # readyResolver.resolveRace(null)
+    def localDrawable := drawSDF(solid(asSDF(makeSimplexNoise.fromShuffledIndices(indices))))
+    addWorkerRef(localDrawable)
+    readyResolver.resolveRace(null)
 
     traceln("Waiting for workers to connect…")
     return when (ready) ->
@@ -246,8 +246,8 @@ def main(_argv,
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
     def ep := makeTCP4ServerEndpoint(port)
     def vp := makeVampEndpoint(currentProcess, makeProcess, b`127.0.0.1`, port)
-    def w := 640
-    def h := 360
+    def w := 320
+    def h := 180
     def solid := study(expandCSG)
     def muffin := getBootMuffin(makeFileResource)
     def which := makeWhich(makeProcess,
