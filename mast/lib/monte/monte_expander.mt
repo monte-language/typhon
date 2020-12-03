@@ -488,14 +488,10 @@ def expand(node, builder, fail) as DeepFrozen:
         validateFor(sw.getStaticScope(key) + sw.getStaticScope(value),
                     sw.getStaticScope(coll), fail, span)
         # `key` and `value` are patterns. We cannot permit any code to run
-        # within the loop until we've done _validateFor(), which normally
-        # means that we use temp nouns and postpone actually unifying the key
-        # and value until afterwards. This is a bit of a waste of time,
-        # especially in very tight loops, and none of our optimizers can
-        # improve it since it's (ironically) unsafe to move any defs around
-        # the _validateFor() call! So, instead, we're considering whether the
-        # patterns can be refuted. If a pattern is irrefutable, then we'll
-        # unify it directly in the method's parameters. ~ C.
+        # within the loop until we've match-bound these patterns. So, instead,
+        # we're considering whether the patterns can be refuted. If a pattern
+        # is irrefutable, then we'll unify it directly in the method's
+        # parameters, generating slightly tighter code. ~ C.
         def [patts, defs] := if (key.refutable()) {
             # The key is refutable, so we go with the traditional layout.
             def kTemp := tempNounExpr("key", span)

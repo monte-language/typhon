@@ -80,18 +80,6 @@ def Empty := makePredicateGuard(def pred(specimen) as DeepFrozenStamp {return sp
 # Alias for map patterns.
 def _mapEmpty := Empty
 
-
-# Must come before List. Must come after Void and Bool.
-def _validateFor(flag :Bool) :Void as DeepFrozenStamp:
-    "Ensure that `flag` is `true`.
-
-     This object is a safeguard against malicious loop objects. A flag is set
-     to `true` and closed over by a loop body; once the loop is finished, the
-     flag is set to `false` and the loop cannot be reëntered."
-
-    if (!flag):
-        throw("Failed to validate loop!")
-
 object _ListGuardStamp:
     to audit(audition):
         return true
@@ -810,7 +798,6 @@ def scopeNames := [
     => throw, => trace, => traceln,
     => _mapEmpty, => _mapExtract,
     => _accumulateList, => _accumulateMap, => _booleanFlow, => _iterForever,
-    => _validateFor,
     => _switchFailed, => _makeVerbFacet, => _comparer, => _suchThat,
     => _matchSame, => _bind, => _quasiMatcher, => _splitList,
     => M, => Ref,  => throw, => promiseAllFulfilled,

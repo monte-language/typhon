@@ -24,7 +24,7 @@ safeScopeNames = [
     u"Void", u"Bool", u"Bytes", u"Char", u"Double", u"Int", u"Str",
     u"_makeOrderedSpace", u"Empty", u"List", u"Map", u"NullOk", u"Pair",
     u"Set", u"Vow", u"_mapEmpty", u"_mapExtract", u"_accumulateList",
-    u"_accumulateMap", u"_booleanFlow", u"_iterForever", u"_validateFor",
+    u"_accumulateMap", u"_booleanFlow", u"_iterForever",
     u"_switchFailed", u"_makeVerbFacet", u"_comparer", u"_suchThat",
     u"_matchSame", u"_bind", u"_quasiMatcher", u"_splitList", u"import",
     u"typhonEval", u"makeLazySlot", u"astBuilder", u"simple__quasiParser",
