@@ -8,6 +8,7 @@ import "lib/streams" =~ [
     => flow :DeepFrozen,
     => makePump :DeepFrozen,
 ]
+import "lib/sealing" =~ [=> makeBrandPair]
 exports (makeAMPServer, makeAMPClient, makeAMPPool)
 
 # Copyright (C) 2015 Google Inc. All rights reserved.

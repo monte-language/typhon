@@ -13,7 +13,7 @@
 # under the License.
 
 # Basic layout: Core guards, core expression syntax, core pattern syntax, and
-# finally extra stuff like brands and simple QP.
+# finally extra stuff like simple QP.
 
 # The comparer can come before guards, since it is extremely polymorphic and
 # doesn't care much about the types of the values that it is manipulating.
@@ -853,9 +853,6 @@ importIntoScope("prelude/monte_ast")
 
 # Simple QP.
 importIntoScope("prelude/simple")
-
-# Brands require simple QP.
-importIntoScope("prelude/brand")
 
 # Interfaces require simple QP.
 importIntoScope("prelude/protocolDesc")

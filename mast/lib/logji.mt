@@ -1,3 +1,4 @@
+import "lib/sealing" =~ [=> makeBrandPair]
 exports (logic, makeKanren, Katren)
 
 # A simple logic monad.

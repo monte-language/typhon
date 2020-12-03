@@ -1,3 +1,6 @@
+import "unittest" =~ [=> unittest :Any]
+exports (makeBrandPair)
+
 # Copyright (C) 2015 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -11,21 +14,25 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-import "unittest" =~ [=> unittest :Any]
-exports (makeBrandPair)
-
 
 def makeBrand(nickname :NullOk[Str]) as DeepFrozen:
     return object brand as DeepFrozen:
+        "A cosmetic label."
+
         to _printOn(out) :Void:
-            out.print(`$nickname`)
+            out.print(`<brand $nickname>`)
 
         to getNickName() :NullOk[Str]:
             return nickname
 
-
 def makeBrandPair(nickname :NullOk[Str]) as DeepFrozen:
-    "Make a [sealer, unsealer] pair."
+    "
+    Make a `[sealer, unsealer]` pair.
+
+    The pair have the property that, for all objects `obj`, it is true that
+    `unsealer.unseal(sealer.seal(obj)) == obj`. The intermediate sealed
+    values, called boxes, cannot be accessed without the unsealer.
+    "
 
     object sentinel:
         pass

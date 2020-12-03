@@ -28,7 +28,7 @@ safeScopeNames = [
     u"_switchFailed", u"_makeVerbFacet", u"_comparer", u"_suchThat",
     u"_matchSame", u"_bind", u"_quasiMatcher", u"_splitList", u"import",
     u"typhonEval", u"makeLazySlot", u"astBuilder", u"simple__quasiParser",
-    u"makeBrandPair", u"_makeMessageDesc", u"_makeParamDesc",
+    u"_makeMessageDesc", u"_makeParamDesc",
     u"_makeProtocolDesc", u"__makeMessageDesc", u"__makeParamDesc",
     u"__makeProtocolDesc", u"b__quasiParser", u"m__quasiParser", u"b``",
     u"m``", u"``", u"eval", u"Transparent", u"safeScope",
