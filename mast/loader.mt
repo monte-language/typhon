@@ -62,9 +62,11 @@ def loaderMain(args :List[Str]) :Vow[Int]:
             configs[modname] := when (code) -> {
                 # traceln(`loadConfig($modname)`)
                 try {
-                    def modObj := typhonAstEval(normalize(readMAST(code),
-                                                          typhonAstBuilder),
-                                                safeScope, fname)
+                    def modObj := astEval.evalToPair(code, safeScope,
+                                                     "filename" => fname)[0]
+                    # def modObj := typhonAstEval(normalize(readMAST(code),
+                    #                                       typhonAstBuilder),
+                    #                             safeScope, fname)
                     makeModuleConfiguration(modname, modObj)
                 } catch problem {
                     traceln(`Unable to eval file ${M.toQuote(fname)}`)
