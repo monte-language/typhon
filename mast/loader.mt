@@ -6,39 +6,31 @@ object moduleGraphLiveExit as DeepFrozen:
 
 interface Config :DeepFrozen {}
 
-def makeModuleConfiguration(module :DeepFrozen,
-                            knownDependencies :Map[Str, DeepFrozen]) as DeepFrozen:
-    return object moduleConfiguration as DeepFrozen implements Config:
+def makeModuleConfiguration(name :Str, module :DeepFrozen) as DeepFrozen:
+    # Known module inputs.
+    def keys :List[Str] := module.dependencies()
+    def dependencies := [for k in (keys)
+                         k => moduleGraphUnsatisfiedExit].diverge()
+
+    return object moduleConfiguration implements Config:
         "Information about the metadata and state of a module."
 
         to _printOn(out):
-            out.print(`moduleConfiguration($knownDependencies)`)
-
-        to getModule() :DeepFrozen:
-            return module
+            out.print(`<configured module $name wants $keys>`)
 
         to dependencyNames() :List[Str]:
-            return module.dependencies()
+            return keys
 
-        to dependencyMap() :Map[Str, DeepFrozen]:
-            return knownDependencies
+        to dependencyMap() :Map[Str, Any]:
+            return dependencies.snapshot()
 
-        to withDependency(petname :Str, dep :DeepFrozen) :DeepFrozen:
-            return makeModuleConfiguration(module,
-                knownDependencies.with(petname, dep))
+        to setDependency(petname :Str, dep):
+            dependencies[petname] := dep
 
-        to withLiveDependency(petname :Str) :DeepFrozen:
-            return makeModuleConfiguration(module,
-                knownDependencies.with(petname, moduleGraphLiveExit))
-
-        to withMissingDependency(petname :Str) :DeepFrozen:
-            return makeModuleConfiguration(module,
-                knownDependencies.with(petname, moduleGraphUnsatisfiedExit))
-
-        to run(loader):
+        to run():
+            def loader."import"(name):
+                return dependencies[name]
             return module(loader)
-
-def ModuleStructure :DeepFrozen := Pair[Map[Str, Map[Str, Any]], NullOk[Config]]
 
 def bytesToStr(bs :Bytes) :Str as DeepFrozen:
     return _makeStr.fromChars([for i in (bs) '\x00' + i])
@@ -59,73 +51,64 @@ def loaderMain(args :List[Str]) :Vow[Int]:
         return def benchBucket(aBench, name :Str):
             collectedBenches.push([`$locus: $name`, aBench])
 
-    def makeLoader(imports :Map):
-        return def loader."import"(name):
-            return imports[name]
-
+    # Set up a single namespace for modules.
+    def configs := [].asMap().diverge()
+    def loadConfig(modname :Str):
+        return configs.fetch(modname, fn {
+            def fname := _findTyphonFile(modname)
+            if (fname == null) { throw(`Unable to locate $modname`) }
+            def code := makeFileResource(fname).getContents()
+            # Only load configs once.
+            configs[modname] := when (code) -> {
+                # traceln(`loadConfig($modname)`)
+                try {
+                    def modObj := typhonAstEval(normalize(readMAST(code),
+                                                          typhonAstBuilder),
+                                                safeScope, fname)
+                    makeModuleConfiguration(modname, modObj)
+                } catch problem {
+                    traceln(`Unable to eval file ${M.toQuote(fname)}`)
+                    traceln.exception(problem)
+                    throw(problem)
+                }
+            }
+        })
 
     def makeModuleAndConfiguration(modname,
                                    => collectTests := false,
                                    => collectBenchmarks := false):
-        def depMap := [].asMap().diverge()
+        def modules := [].asMap().diverge()
         def subload(modname :Str):
             if (modname == "unittest"):
                 if (collectTests):
-                    return [["unittest" => ["unittest" => testCollector[modname]]], null]
+                    return [["unittest" => testCollector[modname]], null]
                 else:
-                    return [["unittest" => ["unittest" => fn _ {null}]], null]
+                    return [["unittest" => fn _ {null}], null]
             if (modname == "bench"):
                 if (collectBenchmarks):
-                    return [["bench" => ["bench" => benchCollector[modname]]], null]
+                    return [["bench" => benchCollector[modname]], null]
                 else:
-                    return [["bench" => ["bench" => fn _, _ {null}]], null]
+                    return [["bench" => fn _, _ {null}], null]
 
-            def fname := _findTyphonFile(modname)
-            if (fname == null):
-                throw(`Unable to locate $modname`)
-
-            # traceln(`subload($modname)`)
-            def loadModuleFile():
-                def code := makeFileResource(fname).getContents()
-                return when (code) ->
-                    try:
-                        def modObj := typhonAstEval(normalize(readMAST(code),
-                                                              typhonAstBuilder),
-                                                    safeScope, fname)
-                        depMap[modname] := makeModuleConfiguration(modObj, [].asMap())
-                    catch problem:
-                        traceln(`Unable to eval file ${M.toQuote(fname)}`)
-                        traceln.exception(problem)
-                        throw(problem)
-            var config := depMap.fetch(modname, loadModuleFile)
-            return when (config) ->
-                def deps := promiseAllFulfilled([for d in (config.dependencyNames())
-                                                 subload(d)])
-                when (deps) ->
-                    # Fill in the module configuration.
-                    def depNames := config.dependencyNames()
-                    for depName in (depNames):
-                        if (depMap.contains(depName)):
-                            def dep := depMap[depName]
-                            # If the dependency is DF, then add it to the map.
-                            # Otherwise, put in the stub.
-                            if (dep =~ frozenDep :DeepFrozen):
-                                config withDependency= (depName, frozenDep)
-                            else:
-                                config withLiveDependency= (depName)
-                        else:
-                            config withMissingDependency= (depName)
-                    # Update the dependency map with the latest config.
-                    depMap[modname] := config
-                    var imports := [].asMap()
-                    for [importable, _] in (deps :List[ModuleStructure]):
-                        imports |= importable
-                    def module := config(makeLoader(imports))
-                    [[modname => module], config]
-        def moduleAndConfig := subload(modname)
-        return when (moduleAndConfig) ->
-            def [[(modname) => module], config] := (moduleAndConfig :ModuleStructure)
-            [module, config]
+            return modules.fetch(modname, fn {
+                # traceln(`subload($modname)`)
+                def config := loadConfig(modname)
+                modules[modname] := when (config) -> {
+                    def deps := [for d in (config.dependencyNames())
+                                 d => subload(d)]
+                    when (promiseAllFulfilled(deps.getValues())) -> {
+                        # Fill in the module configuration.
+                        for depName => [depMod, _] in (deps) {
+                            config.setDependency(depName, depMod)
+                        }
+                        # Instantiate the module.
+                        # traceln("instantiating", config)
+                        def module := config()
+                        [module, config]
+                    }
+                }
+            })
+        return subload(modname)
 
     def usage := "Usage: loader run <modname> <args> | loader test <modname> | loader dot <modname> | loader bench <modname>"
     if (args.size() < 1):
