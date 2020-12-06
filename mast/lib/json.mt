@@ -94,31 +94,43 @@ object JSON as DeepFrozen:
 
     to encode(specimen, ej) :Str:
         return switch (specimen):
-            match m :Map:
-                def pieces := [].diverge()
-                for k => v in (m):
-                    def s :Str exit ej := k
-                    def es := JSON.encodeStr(s)
-                    def ev := JSON.encode(v, ej)
-                    pieces.push(`$es:$ev`)
-                `{${",".join(pieces)}}`
-            match l :List:
-                def pieces := [for i in (l) JSON.encode(i, ej)]
-                `[${",".join(pieces)}]`
-            match i :Int:
-                M.toString(i)
-            match d :Double:
-                M.toString(d)
-            match s :Str:
-                JSON.encodeStr(s)
-            match c :Char:
-                JSON.encodeStr(c.asString())
             match ==true:
                 "true"
             match ==false:
                 "false"
             match ==null:
                 "null"
+            match i :Int:
+                M.toString(i)
+            match d :Double:
+                M.toString(d)
+            match s :Str:
+                JSON.encodeStr(s)
+            match l :List:
+                if (l.isEmpty()) { "[]" } else {
+                    def pieces := ["["].diverge()
+                    for i in (l) {
+                        pieces.push(JSON.encode(i, ej))
+                        pieces.push(",")
+                    }
+                    pieces.pop()
+                    pieces.push("]")
+                    "".join(pieces)
+               }
+            match m :Map:
+                if (m.isEmpty()) { "{}" } else {
+                    def pieces := ["{"].diverge()
+                    for k => v in (m) {
+                        def s :Str exit ej := k
+                        pieces.push(JSON.encodeStr(s))
+                        pieces.push(":")
+                        pieces.push(JSON.encode(v, ej))
+                        pieces.push(",")
+                    }
+                    pieces.pop()
+                    pieces.push("}")
+                    "".join(pieces)
+                }
             match _:
                 throw.eject(ej, `$specimen isn't representable in JSON`)
 
@@ -163,6 +175,8 @@ def testJSONDecodeInvalid(assert):
 
 def encoderSamples := [
     ["first" => 42, "second" => [5, 7]] => "{\"first\":42,\"second\":[5,7]}",
+    [].asMap() => "{}",
+    [] => "[]",
 ]
 
 def testJSONEncode(assert):
