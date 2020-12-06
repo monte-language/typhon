@@ -192,9 +192,9 @@ object Set as DeepFrozenStamp:
                 if (!isSet(specimen)):
                     specimen := specimen._conformTo(SubSet)
 
-                var set := [].asSet()
+                def set := [].asSet().diverge()
                 for element in (specimen):
-                    set with= (subGuard.coerce(element, ej))
+                    set.include(subGuard.coerce(element, ej))
                 return set
 
                 throw.eject(ej,
@@ -717,22 +717,32 @@ object _makeVerbFacet as DeepFrozenStamp:
 def _accumulateMap(iterable, mapper) as DeepFrozenStamp:
     "Implementation of map comprehension syntax."
 
-    def l := _accumulateList(iterable, mapper)
-    return _makeMap.fromPairs(l)
+    def iterator := iterable._makeIterator()
+    # Flex for speed. ~ C.
+    def rv := [].asMap().diverge()
+
+    escape ej:
+        while (true):
+            escape skip:
+                def [key, value] := iterator.next(ej)
+                def [mk, mv] := mapper(key, value, skip)
+                rv[mk] := mv
+
+    return rv.snapshot()
 
 
 def _bind(resolver, guard) as DeepFrozenStamp:
     "Resolve a forward declaration."
 
-    def viaBinder(specimen, ej):
-        return if (guard == null):
+    return if (guard == null):
+        def plainViaBinder(specimen, ej):
             resolver.resolve(specimen)
-            specimen
-        else:
-            def coerced := guard.coerce(specimen, ej)
-            resolver.resolve(coerced)
-            coerced
-    return viaBinder
+            return specimen
+    else:
+        def guardedViaBinder(specimen, ej):
+            def prize := guard.coerce(specimen, ej)
+            resolver.resolve(prize)
+            return prize
 
 
 object _booleanFlow as DeepFrozenStamp:
