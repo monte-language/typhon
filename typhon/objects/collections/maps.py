@@ -349,6 +349,11 @@ class FlexMap(Object):
     def empty(self):
         return not self.objectMap
 
+    @method("Void")
+    def clear(self):
+        "Remove all elements from this map."
+        self.objectMap.clear()
+
     @method("Void", "Any", "Any")
     def put(self, key, value):
         self.objectMap[self.coerceKey(key)] = self.coerceValue(value)

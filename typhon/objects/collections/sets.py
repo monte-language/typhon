@@ -268,6 +268,11 @@ class FlexSet(Object):
     def empty(self):
         return not self.objectSet
 
+    @method("Void")
+    def clear(self):
+        "Remove all elements from this set."
+        self.objectSet.clear()
+
     @method("Bool", "Any")
     def contains(self, needle):
         return needle in self.objectSet

@@ -88,6 +88,11 @@ class FlexList(Object):
     def empty(self):
         return not bool(self._l)
 
+    @method("Void")
+    def clear(self):
+        "Remove all elements from this list."
+        self._l[0:len(self._l)] = []
+
     @method("List", "List")
     def join(self, pieces):
         l = []
