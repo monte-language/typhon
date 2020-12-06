@@ -33,9 +33,9 @@ def [AMPState :DeepFrozen,
 ] := makeEnum(["AMP key length", "AMP value length", "AMP string"])
 
 def makeAMPPacketMachine() as DeepFrozen:
-    var packetMap :Map := [].asMap()
+    def packetMap := [].asMap().diverge(Str, Str)
     var pendingKey :Str := ""
-    var results :List := []
+    def results := [].diverge(Map)
 
     return object AMPPacketMachine:
         to getStateGuard():
@@ -53,8 +53,8 @@ def makeAMPPacketMachine() as DeepFrozen:
                     # If the length was zero, then it was the end-of-packet
                     # marker. Go ahead and snip the packet.
                     if (len == 0):
-                        results with= (packetMap)
-                        packetMap := [].asMap()
+                        results.push(packetMap.snapshot())
+                        packetMap.clear()
                         [KEY, 2]
                     else:
                         # Otherwise, get the actual key string.
@@ -68,33 +68,39 @@ def makeAMPPacketMachine() as DeepFrozen:
                     def s := UTF8.decode(_makeBytes.fromInts(data), null)
                     # Was this for a key or a value? We'll guess based on
                     # whether there's a pending key.
-                    if (pendingKey == ""):
+                    if (pendingKey.isEmpty()):
                         # This was a key.
                         pendingKey := s
                         [VALUE, 2]
                     else:
                         # This was a value.
-                        packetMap with= (pendingKey, s)
+                        packetMap[pendingKey] := s
                         pendingKey := ""
                         [KEY, 2]
 
         to results():
-            def rv := results
-            results := []
+            def rv := results.snapshot()
+            results.clear()
             return rv
 
 
+# A variety of error-handling approaches are possible here; in this case,
+# we'll let _makeBytes.fromInts/1 throw an exception. ~ C.
+def packSize(i :Int) :Bytes as DeepFrozen:
+    return _makeBytes.fromInts([i >> 8, i & 0xff])
+
+
 def packAMPPacket(packet :Map[Str, Str]) :Bytes as DeepFrozen:
-    var buf := []
+    def pieces := [].diverge()
     for via (UTF8.encode) key => via (UTF8.encode) value in (packet):
         def keySize :(Int <= 0xff) := key.size()
-        buf += [0x00, keySize]
-        buf += _makeList.fromIterable(key)
+        pieces.push(packSize(keySize))
+        pieces.push(key)
         def valueSize :(Int <= 0xffff) := value.size()
-        buf += [valueSize >> 8, valueSize & 0xff]
-        buf += _makeList.fromIterable(value)
-    buf += [0x00, 0x00]
-    return _makeBytes.fromInts(buf)
+        pieces.push(packSize(valueSize))
+        pieces.push(value)
+    pieces.push(b`$\x00$\x00`)
+    return b``.join(pieces)
 
 
 def testPackAMPPacket(assert):
@@ -114,7 +120,7 @@ unittest([
 
 def makeAMP(sink, handler) as DeepFrozen:
     var serial :Int := 0
-    var pending := [].asMap()
+    def pending := [].asMap().diverge(Int, Any)
 
     def process(box) :Void:
         # Either it's a new command, a successful reply, or a failure.
@@ -146,7 +152,9 @@ def makeAMP(sink, handler) as DeepFrozen:
                 if (pending.contains(answer)):
                     # traceln(`AMP: ! $_answer (success)`)
                     pending[answer].resolve(arguments)
-                    pending without= (answer)
+                    pending.removeKey(answer)
+                else:
+                    traceln(`AMP: Received Martian answer $answer`)
             match [=> _error] | arguments:
                 # Error reply.
                 def error := _makeInt.fromBytes(_error)
@@ -154,9 +162,11 @@ def makeAMP(sink, handler) as DeepFrozen:
                     # traceln(`AMP: ! $_error (error)`)
                     def [=> _error_description := "unknown error"] | _ := arguments
                     pending[error].smash(_error_description)
-                    pending without= (error)
+                    pending.removeKey(error)
+                else:
+                    traceln(`AMP: Received Martian error $error`)
             match _:
-                pass
+                traceln("AMP: Received unknwon AMP box", box)
 
     return object AMP:
         to sink() :Sink:
@@ -170,15 +180,15 @@ def makeAMP(sink, handler) as DeepFrozen:
             def boxPump := makePump.fromStateMachine(makeAMPPacketMachine())
             return alterSink.fusePump(boxPump, AMPSink)
 
-        to send(command :Str, var arguments :Map, expectReply :Bool):
+        to send(command :Str, arguments :Map, expectReply :Bool):
             return if (expectReply):
                 # traceln(`AMP: ? $serial`)
                 # traceln(`AMP: -> $command (send)`)
-                arguments |= ["_command" => command, "_ask" => `$serial`]
+                def packet := arguments | ["_command" => command, "_ask" => `$serial`]
                 def resolver := def reply
-                pending |= [serial => resolver]
+                pending[serial] := resolver
                 serial += 1
-                sink<-(packAMPPacket(arguments))
+                sink<-(packAMPPacket(packet))
                 reply
             else:
                 # Send-only. (And there's no reply at all, no, there's no
