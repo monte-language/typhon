@@ -264,4 +264,6 @@ def main(_argv,
             def png := traceToPNG(Timer, entropy, w, h, solid, pool, nproc)
             when (png) ->
                 traceln(`Created PNG of ${png.size()}b`)
-                when (makeFileResource("sdf.png")<-setContents(png)) -> { 0 }
+                when (makeFileResource("sdf.png")<-setContents(png)) ->
+                    currentProcess.interrupt()
+                    0
