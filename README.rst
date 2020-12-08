@@ -11,7 +11,7 @@ How To Monte
 You will need Nix, either by dint of being on NixOS or by installing
 single-user Nix.
 
-Once you have Nix, you can build a complete toolchain by building the ``monte``
+Once you have Nix, you can build a basic toolchain by building the ``monte``
 target::
 
     $ nix-build -A monte
@@ -21,19 +21,27 @@ and 5min CPU time on a 64-bit x86 system to translate a non-JIT Typhon
 executable, or 1GiB memory and 15min CPU time with the JIT enabled. It will
 take another few minutes to build all of the Monte support libraries.
 
+For only a bit more extra CPU time, one can build a toolchain which includes
+Capn Proto support::
+
+    $ nix-build -A fullMonte
+
+The pure-Monte portions of the build are incremental, so after building
+``monte``, the build of ``fullMonte`` should be relatively quick.
+
 For development, it can be useful to build only the VM::
 
     $ nix-build -A typhonVm
+
+And to run the VM untranslated, use a Nix shell::
+
+    $ nix-shell default.nix -A typhonVm
+    [nix-shell:~/typhon]$ pypy main.py ...
 
 Contributing
 ============
 
 Contributions are welcome. Please ensure that you're okay with the license!
-
-Unit tests are tested by Travis. You can run them yourself; I recommend the
-Trial test runner::
-
-    $ nix-shell -A typhonVm --run 'trial typhon'
 
 Diffing Typhon Binaries
 -----------------------
