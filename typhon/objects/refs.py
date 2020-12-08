@@ -69,6 +69,20 @@ def isBroken(o):
         return False
 
 
+def isEventual(ref):
+    if isinstance(ref, Promise):
+        return ref.state() is EVENTUAL
+    else:
+        return False
+
+
+def isNear(ref):
+    if isinstance(ref, Promise):
+        return ref.state() is NEAR
+    else:
+        return True
+
+
 @autohelp
 @audited.DF
 class RefOps(Object):
@@ -147,10 +161,7 @@ class RefOps(Object):
         Refs that are resolved to near objects are also near.
         """
 
-        if isinstance(ref, Promise):
-            return ref.state() is NEAR
-        else:
-            return True
+        return isNear(ref)
 
     @method.py("Bool", "Any")
     def isEventual(self, ref):
@@ -158,10 +169,7 @@ class RefOps(Object):
         Whether an object is an eventual ref.
         """
 
-        if isinstance(ref, Promise):
-            return ref.state() is EVENTUAL
-        else:
-            return False
+        return isEventual(ref)
 
     @method("Bool", "Any")
     def isBroken(self, ref):
@@ -368,7 +376,7 @@ class WhenNearReactor(Object):
         if self.done:
             return
 
-        if self._ref.state() is NEAR:
+        if isNear(self._ref):
             try:
                 outcome = self._cb.call(u"run", [self._ref])
                 if self._resolver is not None:
@@ -381,7 +389,7 @@ class WhenNearReactor(Object):
                     self._resolver.smash(sealException(ue))
 
             self.done = True
-        elif self._ref.state() is BROKEN:
+        elif isBroken(self._ref):
             if self._resolver is not None:
                 self._resolver.resolve(self._ref)
             self.done = True
@@ -412,10 +420,10 @@ class WhenBrokenReactor(Object):
             # Near refs can't possibly be broken.
             return
 
-        if self._ref.state() is EVENTUAL:
+        if isEventual(self._ref):
             self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
                               EMPTY_MAP)
-        elif self._ref.state() is BROKEN:
+        elif isBroken(self._ref):
             try:
                 # Deliver the brokenness notification.
                 outcome = self._cb.call(u"run", [self._ref])
@@ -706,7 +714,7 @@ class SwitchableRef(Promise):
             return False
         else:
             self.resolutionRef()
-            return self._target.isResolved()
+            return isResolved(self._target)
 
     def setTarget(self, newTarget):
         if self.isSwitchable:
