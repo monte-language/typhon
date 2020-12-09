@@ -313,7 +313,7 @@ class WhenReactor(Object):
     def __init__(self, callback, errback, ref, resolver, vat):
         self._cb = callback
         self._eb = errback
-        self._ref = _toRef(ref, vat)
+        self._ref = ref
         self._resolver = resolver
         self.vat = vat
 
@@ -326,16 +326,15 @@ class WhenReactor(Object):
         if self.done:
             return
 
-        if self._ref.isResolved():
-            if isBroken(self._ref):
-                f = self._eb
-            else:
-                f = self._cb
+        if isResolved(self._ref):
             try:
-                outcome = f.call(u"run", [self._ref])
-                if not isBroken(self._ref) and isBroken(outcome):
-                    # success arm returned a broken promise
-                    outcome = self._eb.call(u"run", [outcome])
+                if isBroken(self._ref):
+                    outcome = self._eb.call(u"run", [self._ref])
+                else:
+                    outcome = self._cb.call(u"run", [self._ref])
+                    if isBroken(outcome):
+                        # success arm returned a broken promise
+                        outcome = self._eb.call(u"run", [outcome])
                 self._resolver.resolve(outcome)
             except UserException as ue:
                 from typhon.objects.exceptions import sealException
@@ -363,7 +362,7 @@ class WhenNearReactor(Object):
 
     def __init__(self, callback, ref, resolver, vat):
         self._cb = callback
-        self._ref = _toRef(ref, vat)
+        self._ref = ref
         self._resolver = resolver
         self.vat = vat
 
@@ -449,7 +448,7 @@ class WhenResolvedReactor(Object):
 
     def __init__(self, callback, ref, resolver, vat):
         self._cb = callback
-        self._ref = _toRef(ref, vat)
+        self._ref = ref
         self._resolver = resolver
         self.vat = vat
 
@@ -462,7 +461,7 @@ class WhenResolvedReactor(Object):
         if self.done:
             return
 
-        if self._ref.isResolved():
+        if isResolved(self._ref):
             try:
                 outcome = self._cb.call(u"run", [self._ref])
                 if self._resolver is not None:
