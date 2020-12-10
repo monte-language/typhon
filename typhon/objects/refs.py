@@ -12,8 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import weakref
-
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.enum import makeEnum
@@ -38,15 +36,8 @@ _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
 
 def makePromise(guard=None):
     vat = currentVat.get()
-    buf = MessageBuffer(vat)
-    sref = SwitchableRef(BufferingRef(buf))
-    return sref, LocalResolver(sref, buf, vat, guard)
-
-
-def _toRef(o, vat):
-    if isinstance(o, Promise):
-        return o
-    return NearRef(o, vat)
+    sref = SwitchableRef(vat)
+    return sref, LocalResolver(sref, vat, guard)
 
 
 def resolution(o):
@@ -574,10 +565,11 @@ class LocalResolver(Object):
     A resolver for a promise.
     """
 
-    def __init__(self, ref, buf, vat, guard):
+    def __init__(self, ref, vat, guard):
         assert vat is not None, "Vat cannot be None"
+        # NB: ref is always a SwitchableRef. After we switch it, then we set
+        # it to None, both for GC and also to indicate that we're resolved.
         self._ref = ref
-        self._buf = buf
         self.vat = vat
         self.guard = guard
 
@@ -606,12 +598,9 @@ class LocalResolver(Object):
                     except UserException as ue:
                         from typhon.objects.exceptions import sealException
                         target = UnconnectedRef(self.vat, sealException(ue))
-            self._ref.setTarget(_toRef(target, self.vat))
-            self._ref.commit()
-            self._buf.deliverAll(target)
-
+            target = resolution(target)
+            self._ref.setTargetAndCommit(target)
             self._ref = None
-            self._buf = None
             return True
 
     @method.py("Bool", "Any")
@@ -632,29 +621,6 @@ class LocalResolver(Object):
 
     def makeSmasher(self):
         return Smash(self)
-
-
-class MessageBuffer(object):
-
-    def __init__(self, vat):
-        self.vat = vat
-        self._buf = []
-
-    def enqueue(self, resolver, atom, args, namedArgs):
-        self._buf.append((resolver, atom, args, namedArgs))
-
-    def deliverAll(self, target):
-        #XXX record sending-context information for causality tracing
-        targRef = _toRef(target, self.vat)
-        for resolver, atom, args, namedArgs in self._buf:
-            if resolver is None:
-                targRef.sendAllOnly(atom, args, namedArgs)
-            else:
-                result = targRef.sendAll(atom, args, namedArgs)
-                resolver.resolve(result)
-        rv = len(self._buf)
-        self._buf = []
-        return rv
 
 
 @autohelp
@@ -723,19 +689,24 @@ class Promise(Object):
 
 class SwitchableRef(Promise):
     """
-    Starts out pointing to one promise and switches to another later.
+    Starts out not really pointing to anything, but can switch to point to
+    something later.
     """
 
-    isSwitchable = True
+    # NB: We switch all of our mutable state at once. Either:
+    # * isSwitchable, _target is None, len(_buf)
+    # * not isSwitchable, _target, _buf is None
 
-    def __init__(self, target):
-        self._target = target
+    isSwitchable = True
+    _target = None
+
+    def __init__(self, vat):
+        self.vat = vat
+        self._buf = []
 
     def toString(self):
         if self.isSwitchable:
-            # NB: This should be an exceptional state, but some stuff in our
-            # stack can't handle it yet. ~ C.
-            return u"<unsafely-printed promise>"
+            return u"<switchable promise>"
         else:
             self.resolutionRef()
             return self._target.toString()
@@ -751,36 +722,49 @@ class SwitchableRef(Promise):
                     atom.repr.decode("utf-8"))
         else:
             self.resolutionRef()
-            return self._target.callAll(atom, args, namedArgs)
+            return self._target.callAtom(atom, args, namedArgs)
 
     def sendAll(self, atom, args, namedArgs):
-        self.resolutionRef()
-        return self._target.sendAll(atom, args, namedArgs)
+        if self.isSwitchable:
+            p, r = makePromise()
+            self._buf.append((r, atom, args, namedArgs))
+            return p
+        else:
+            self.resolutionRef()
+            return self.vat.send(self._target, atom, args, namedArgs)
 
     def sendAllOnly(self, atom, args, namedArgs):
-        self.resolutionRef()
-        return self._target.sendAllOnly(atom, args, namedArgs)
+        if self.isSwitchable:
+            self._buf.append((None, atom, args, namedArgs))
+        else:
+            self.resolutionRef()
+            self.vat.sendOnly(self._target, atom, args, namedArgs)
+        return NullObject
 
     def optProblem(self):
         if self.isSwitchable:
             return NullObject
-        else:
+        elif isinstance(self._target, Promise):
             self.resolutionRef()
             return self._target.optProblem()
+        else:
+            return NullObject
 
     def resolutionRef(self):
         if self.isSwitchable:
             return self
-        else:
+        elif isinstance(self._target, Promise):
             self._target = self._target.resolutionRef()
-            return self._target
+        return self._target
 
     def state(self):
         if self.isSwitchable:
             return EVENTUAL
-        else:
+        elif isinstance(self._target, Promise):
             self.resolutionRef()
             return self._target.state()
+        else:
+            return NEAR
 
     def isResolved(self):
         if self.isSwitchable:
@@ -789,116 +773,45 @@ class SwitchableRef(Promise):
             self.resolutionRef()
             return isResolved(self._target)
 
-    def setTarget(self, newTarget):
-        if self.isSwitchable:
-           newTarget = newTarget.resolutionRef()
-           if self is newTarget:
-               raise userError(u"Ref loop")
-           else:
-               self._target = newTarget
-        else:
+    def _become(self, newTarget):
+        assert self.isSwitchable, "goodnight"
+        self.isSwitchable = False
+        self._target = newTarget
+        self._buf = None
+
+    def setTargetAndCommit(self, newTarget):
+        if not self.isSwitchable:
             raise userError(u"No longer switchable")
 
-    def commit(self):
-        if not self.isSwitchable:
-            return
-        newTarget = self._target.resolutionRef()
-        self._target = None
-        self.isSwitchable = False
-        newTarget = newTarget.resolutionRef()
-        if newTarget is None:
-            raise userError(u"Ref loop")
-        else:
-            self._target = newTarget
+        # Coalesce multiple switches in a chain.
+        while isinstance(newTarget, SwitchableRef):
+            if self is newTarget:
+                raise userError(u"Ref loop while coalescing switched promises")
 
+            if newTarget.isSwitchable:
+                # Hard branch: Copy ourselves into the target switch.
+                self._buf.extend(newTarget._buf)
+                newTarget._buf = self._buf
+                # Commit ourselves to the new target, so that anybody pointing
+                # to us can chase the pointer. (Our methods will still work.)
+                self._become(newTarget)
+                # And we're done, actually; there's nothing to deliver since
+                # we are now switchable and don't have a new target to set.
+                return
+            else:
+                # Easy branch: Shorten the pointer chain.
+                newTarget = newTarget._target
 
-class BufferingRef(Promise):
+        # Deliver buffered messages.
+        for resolver, atom, args, namedArgs in self._buf:
+            if resolver is None:
+                self.vat.sendOnly(newTarget, atom, args, namedArgs)
+            else:
+                result = self.vat.send(newTarget, atom, args, namedArgs)
+                resolver.resolve(result)
 
-    def __init__(self, buf):
-        # Note to self: Weakref.
-        self._buf = weakref.ref(buf)
-
-    def toString(self):
-        return u"<bufferingRef>"
-
-    def computeHash(self, depth):
-        raise userError(u"Unsettled promise is not hashable")
-
-    def callAll(self, atom, args, namedArgs):
-        raise userError(u"not synchronously callable (%s)" %
-                atom.repr.decode("utf-8"))
-
-    def sendAll(self, atom, args, namedArgs):
-        optMsgs = self._buf()
-        if optMsgs is None:
-            # XXX what does it mean for us to have no more buffer?
-            return self
-        else:
-            p, r = makePromise()
-            optMsgs.enqueue(r, atom, args, namedArgs)
-            return p
-
-    def sendAllOnly(self, atom, args, namedArgs):
-        optMsgs = self._buf()
-        if optMsgs is not None:
-            optMsgs.enqueue(None, atom, args, namedArgs)
-        return NullObject
-
-    def optProblem(self):
-        return NullObject
-
-    def resolutionRef(self):
-        return self
-
-    def state(self):
-        return EVENTUAL
-
-    def isResolved(self):
-        return False
-
-    def commit(self):
-        pass
-
-
-class NearRef(Promise):
-
-    def __init__(self, target, vat):
-        assert vat is not None, "Vat cannot be None"
-        self.target = target
-        self.vat = vat
-
-    def toString(self):
-        return self.target.toString()
-
-    def computeHash(self, depth):
-        return self.target.computeHash(depth)
-
-    def callAll(self, atom, args, namedArgs):
-        return self.target.callAtom(atom, args, namedArgs)
-
-    def sendAll(self, atom, args, namedArgs):
-        return self.vat.send(self.target, atom, args, namedArgs)
-
-    def sendAllOnly(self, atom, args, namedArgs):
-        return self.vat.sendOnly(self.target, atom, args, namedArgs)
-
-    def optProblem(self):
-        return NullObject
-
-    def state(self):
-        return NEAR
-
-    def resolution(self):
-        return self.target
-
-    def resolutionRef(self):
-        return self
-
-    def isResolved(self):
-        return True
-
-    def commit(self):
-        pass
+        # And switch to become the new ref.
+        self._become(newTarget)
 
 
 def packLocalRef(obj, objVat, originVat):
