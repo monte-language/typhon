@@ -181,18 +181,8 @@ def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool, nproc) as D
         traceln("Got workers, starting work!")
         def start := Timer.unsafeNow()
         var i := 0
-        # NB: There are other ways to do this recursion, but we're trying to avoid
-        # a Typhon implementation issue where thousands of chained promises can
-        # resolve in a way which causes a stack overflow.
-        def doneResolver := def done
         def go():
-            def p := escape ej { drawer.next(ej) } catch _ {
-                doneResolver.resolveRace(null)
-                return
-            }
-
-            when (p) ->
-                go<-()
+            return when (drawer.next(__return)) ->
                 i += 1
                 if (i % 2000 == 0):
                     def duration := Timer.unsafeNow() - start
@@ -201,10 +191,10 @@ def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool, nproc) as D
                     def normPixels := `(${(pixelsPerSecond * cost).logarithm()} work/s)`
                     def workerStatus := `(${activeWorkers()}/$nproc working, ${queuedWork()} queued)`
                     traceln(`Status: ${(i * 100) / (width * height)}% ($pixelsPerSecond px/s) $normPixels $workerStatus (${timeRemaining}s left)`)
+                go<-()
         # Feed each worker.
-        for _ in (0..!nproc):
-            go<-()
-        when (done) ->
+        def runs := [for _ in (0..nproc) go<-()]
+        when (promiseAllFulfilled(runs)) ->
             drawer.finish()
 
 # XXX cribbed from tools/repl, craves to share code with montec
