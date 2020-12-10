@@ -135,8 +135,10 @@ def makeRunner(_stdio, unsealException, Timer) as DeepFrozen:
             traceln.exception(problem)
             if (problem =~ via (unsealException) [_, err]):
                 formatError(err, k, test)
+                Ref.broken(err)
             else:
                 formatError(problem, k, test)
+                Ref.broken(problem)
 
     return def runner.runTests(tests) :Vow[Int]:
         "Run some `tests`. Return the number of failing tests."
