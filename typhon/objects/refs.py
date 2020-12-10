@@ -134,6 +134,8 @@ class RefOps(Object):
     def promise(self, guard=None):
         """
         Create a [promise, resolver] pair.
+
+        The optional `=> guard` will coerce the promise's resolution.
         """
 
         p, r = makePromise(guard=guard)
@@ -146,12 +148,6 @@ class RefOps(Object):
         """
 
         return UnconnectedRef(currentVat.get(), problem)
-
-    def optBroken(self, optProblem):
-        if optProblem is NullObject:
-            return NullObject
-        else:
-            return self.broken(optProblem)
 
     @method.py("Bool", "Any")
     def isNear(self, ref):
@@ -230,12 +226,16 @@ class RefOps(Object):
         from typhon.objects.collections.maps import EMPTY_MAP
         vat = currentVat.get()
         vat.sendOnly(o, _WHENMORERESOLVED_1,
-                     [WhenResolvedReactor(callback, o, None, vat)],
+                     [WhenResolvedOnlyReactor(callback, o, vat)],
                      EMPTY_MAP)
         return NullObject
 
     @method("Any", "Any", "Any")
     def whenBroken(self, o, callback):
+        if not isinstance(o, Promise):
+            # Near refs can't possibly be broken.
+            return
+
         from typhon.objects.collections.maps import EMPTY_MAP
         p, r = makePromise()
         vat = currentVat.get()
@@ -246,10 +246,14 @@ class RefOps(Object):
 
     @method("Any", "Any", "Any")
     def whenBrokenOnly(self, o, callback):
+        if not isinstance(o, Promise):
+            # Near refs can't possibly be broken.
+            return
+
         from typhon.objects.collections.maps import EMPTY_MAP
         vat = currentVat.get()
         return vat.sendOnly(o, _WHENMORERESOLVED_1,
-                            [WhenBrokenReactor(callback, o, None, vat)],
+                            [WhenBrokenOnlyReactor(callback, o, vat)],
                             EMPTY_MAP)
 
     @method("Any", "Any", "Any")
@@ -267,7 +271,7 @@ class RefOps(Object):
         from typhon.objects.collections.maps import EMPTY_MAP
         vat = currentVat.get()
         return vat.sendOnly(o, _WHENMORERESOLVED_1,
-                            [WhenNearReactor(callback, o, None, vat)],
+                            [WhenNearOnlyReactor(callback, o, vat)],
                             EMPTY_MAP)
 
     @method("Bool", "Any")
@@ -296,7 +300,7 @@ class RefOps(Object):
         too far away.
         """
 
-        return self.isNear(o) and not self.isSelfless(o)
+        return isNear(o) and not self.isSelfless(o)
 
 
 @autohelp
@@ -378,19 +382,46 @@ class WhenNearReactor(Object):
         if isNear(self._ref):
             try:
                 outcome = self._cb.call(u"run", [self._ref])
-                if self._resolver is not None:
-                    self._resolver.resolve(outcome)
+                self._resolver.resolve(outcome)
             except UserException as ue:
-                if self._resolver is None:
-                    raise
-                else:
-                    from typhon.objects.exceptions import sealException
-                    self._resolver.smash(sealException(ue))
+                from typhon.objects.exceptions import sealException
+                self._resolver.smash(sealException(ue))
 
             self.done = True
         elif isBroken(self._ref):
-            if self._resolver is not None:
-                self._resolver.resolve(self._ref)
+            self._resolver.resolve(self._ref)
+            self.done = True
+        else:
+            self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
+                              EMPTY_MAP)
+
+
+@autohelp
+class WhenNearOnlyReactor(Object):
+    """
+    A reactor that invokes its callback when a promise is resolved successfully.
+    """
+
+    done = False
+
+    def __init__(self, callback, ref, vat):
+        self._cb = callback
+        self._ref = ref
+        self.vat = vat
+
+    def toString(self):
+        return u"<when near: %s>" % self._cb.toString()
+
+    @method("Void", "Any")
+    def run(self, unused):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        if self.done:
+            return
+
+        if isNear(self._ref):
+            self._cb.call(u"run", [self._ref])
+            self.done = True
+        elif isBroken(self._ref):
             self.done = True
         else:
             self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
@@ -415,10 +446,6 @@ class WhenBrokenReactor(Object):
     @method("Void", "Any")
     def run(self, unused):
         from typhon.objects.collections.maps import EMPTY_MAP
-        if not isinstance(self._ref, Promise):
-            # Near refs can't possibly be broken.
-            return
-
         if isEventual(self._ref):
             self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
                               EMPTY_MAP)
@@ -426,16 +453,38 @@ class WhenBrokenReactor(Object):
             try:
                 # Deliver the brokenness notification.
                 outcome = self._cb.call(u"run", [self._ref])
-                if self._resolver is not None:
-                    # Success.
-                    self._resolver.resolve(outcome)
+                # Success.
+                self._resolver.resolve(outcome)
             except UserException as ue:
                 # Failure. Continue delivering failures.
-                if self._resolver is None:
-                    raise
-                else:
-                    from typhon.objects.exceptions import sealException
-                    self._resolver.smash(sealException(ue))
+                from typhon.objects.exceptions import sealException
+                self._resolver.smash(sealException(ue))
+
+
+@autohelp
+class WhenBrokenOnlyReactor(Object):
+    """
+    A reactor which delivers information about broken promises.
+    """
+
+    def __init__(self, callback, ref, vat):
+        self._cb = callback
+        # NB: Always a promise.
+        self._ref = ref
+        self.vat = vat
+
+    def toString(self):
+        return u"<when broken: %s>" % self._cb.toString()
+
+    @method("Void", "Any")
+    def run(self, unused):
+        if isEventual(self._ref):
+            from typhon.objects.collections.maps import EMPTY_MAP
+            self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
+                              EMPTY_MAP)
+        elif isBroken(self._ref):
+            # Deliver the brokenness notification.
+            self._cb.call(u"run", [self._ref])
 
 
 @autohelp
@@ -464,15 +513,41 @@ class WhenResolvedReactor(Object):
         if isResolved(self._ref):
             try:
                 outcome = self._cb.call(u"run", [self._ref])
-                if self._resolver is not None:
-                    self._resolver.resolve(outcome)
+                self._resolver.resolve(outcome)
             except UserException as ue:
-                if self._resolver is None:
-                    raise
-                else:
-                    from typhon.objects.exceptions import sealException
-                    self._resolver.smash(sealException(ue))
+                from typhon.objects.exceptions import sealException
+                self._resolver.smash(sealException(ue))
 
+            self.done = True
+        else:
+            self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
+                              EMPTY_MAP)
+
+
+@autohelp
+class WhenResolvedOnlyReactor(Object):
+    """
+    A reactor which delivers information about resolved promises.
+    """
+
+    done = False
+
+    def __init__(self, callback, ref, vat):
+        self._cb = callback
+        self._ref = ref
+        self.vat = vat
+
+    def toString(self):
+        return u"<when resolved: %s>" % self._cb.toString()
+
+    @method("Void", "Any")
+    def run(self, unused):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        if self.done:
+            return
+
+        if isResolved(self._ref):
+            self._cb.call(u"run", [self._ref])
             self.done = True
         else:
             self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
@@ -563,7 +638,6 @@ class MessageBuffer(object):
 
     def __init__(self, vat):
         self.vat = vat
-
         self._buf = []
 
     def enqueue(self, resolver, atom, args, namedArgs):
