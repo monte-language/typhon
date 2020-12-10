@@ -769,10 +769,10 @@ class SwitchableRef(Promise):
             return self._target.optProblem()
 
     def resolutionRef(self):
-        self._target = self._target.resolutionRef()
         if self.isSwitchable:
             return self
         else:
+            self._target = self._target.resolutionRef()
             return self._target
 
     def state(self):
