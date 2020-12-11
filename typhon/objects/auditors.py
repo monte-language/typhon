@@ -364,7 +364,7 @@ class DeepFrozen(Object):
             raise userError(u"not an Audition")
 
         from typhon.metrics import globalRecorder
-        with globalRecorder().context("Audition (DF)"):
+        with globalRecorder().context(u"deepfrozen"):
             auditDeepFrozen(audition)
             audition.ask(deepFrozenStamp)
             return False

@@ -75,8 +75,9 @@ def loadPrelude(config, recorder, vat):
                      u"Str": scope[u"Str"],
                      u"Void": scope[u"Void"]})
 
-    module = obtainModule(config.libraryPaths, recorder, "prelude")
-    with recorder.context("Time spent in prelude"):
+    with recorder.context(u"mast"):
+        module = obtainModule(config.libraryPaths, recorder, "prelude")
+    with recorder.context(u"prelude"):
         result = module.eval(scope)[0]
 
     assert result is not None, "Prelude returned None"
@@ -98,11 +99,11 @@ def runUntilDone(vatManager, uv_loop, recorder):
         for vat in vatManager.vats:
             if vat.hasTurns():
                 with scopedVat(vat) as vat:
-                    with recorder.context("Time spent in vats"):
+                    with recorder.context(u"vatturn"):
                         vat.takeSomeTurns()
 
         if ruv.loopAlive(uv_loop):
-            with recorder.context("Time spent in I/O"):
+            with recorder.context(u"io"):
                 ruv.cleanup()
                 try:
                     if anyVatHasTurns:
@@ -255,7 +256,7 @@ def runTyphon(argv):
         debug_print("Taking initial turn in script...")
         result = NullObject
         try:
-            with recorder.context("Time spent in vats"):
+            with recorder.context(u"vatturn"):
                 with scopedVat(vat):
                     result = module.eval(unsafeScopeDict)[0]
             if result is None:

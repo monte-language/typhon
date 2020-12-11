@@ -84,7 +84,7 @@ class Module(Object):
 
 class AstModule(Module):
     def load(self, source):
-        with self.recorder.context("Deserialization"):
+        with self.recorder.context(u"mast"):
             self.astSource = nanoLoad(source, self.origin)
 
     @dont_look_inside

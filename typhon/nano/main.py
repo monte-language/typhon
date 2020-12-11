@@ -12,7 +12,7 @@ def mainPipeline(expr, safeScopeNames, fqnPrefix, inRepl):
     """
 
     from typhon.metrics import globalRecorder
-    with globalRecorder().context("Main nanopass pipeline"):
+    with globalRecorder().context(u"nanopass"):
         ss = saveScripts(expr)
         slotted = recoverSlots(ss)
         ll, outerNames, topLocalNames, localSize = layoutScopes(slotted,

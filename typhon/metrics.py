@@ -118,7 +118,7 @@ class Recorder(object):
             section = timing / total
             unaccounted -= section
             rv[label] = section
-        rv["unaccounted"] = unaccounted
+        rv[u"unaccounted"] = unaccounted
         return rv
 
     def printResults(self):
@@ -127,7 +127,7 @@ class Recorder(object):
         debug_print("Recorded times:")
         for label in self.timings:
             t = self.timings[label]
-            debug_print("~", label + ":", t, "(%s)" % percent(t, total))
+            debug_print("~", label.encode("utf-8") + ":", t, "(%s)" % percent(t, total))
 
         debug_print("Recorded rates:")
         for label, rate in self.rates.iteritems():

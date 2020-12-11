@@ -146,6 +146,16 @@ class TimerStats(Object):
     When Typhon exits certain critical sections, it measures the cumulative
     elapsed time spent in those sections. This includes time spent taking vat
     turns and waiting for I/O.
+
+    Specifically, Typhon has timings for the following sections:
+
+    * "mast": Loading and deserializing code from disk
+    * "nanopass": Optimizing loaded code
+    * "deepfrozen": Auditing objects with DeepFrozen
+    * "prelude": Executing code before vats are ready
+    * "vatturn": Vats taking turns
+    * "io": Performing platform I/O
+    * "unaccounted": Everything else not in its own section
     """
 
     __immutable__ = True
@@ -158,7 +168,7 @@ class TimerStats(Object):
         "A map from section names to the relative amount of time spent."
         rv = monteMap()
         for k, v in self.sections.items():
-            rv[wrapBytes(k)] = DoubleObject(v)
+            rv[StrObject(k)] = DoubleObject(v)
         return rv
 
 
