@@ -94,13 +94,8 @@ class Proxy(Promise):
                 return ref.optProblem()
         return NullObject
 
-    def resolutionRef(self):
-        if self.checkSlot():
-            ref = self.resolutionBox.get()
-            if isinstance(ref, Promise):
-                return ref.resolutionRef()
-            return ref
-        return self
+    def resolution(self):
+        return resolution(self.resolutionBox.get()) if self.checkSlot() else self
 
     def callAll(self, atom, args, namedArgs):
         if self.checkSlot():
@@ -189,27 +184,24 @@ class FarRef(Proxy):
     def isResolved(self):
         return True
 
-    def resolutionRef(self):
-        if self.checkSlot():
-            return self.resolutionBox.get()
-        return self
+    def resolution(self):
+        return self.resolutionBox.get() if self.checkSlot() else self
 
     def commit(self):
         # A FarRef can only stop proxying if it becomes disconnected, when it
         # resolves to a DisconnectedRef.
         handler = self.handler
-        resolution = Proxy.commit(self)
-        if not isinstance(resolution, UnconnectedRef):
+        res = Proxy.commit(self)
+        if not isinstance(res, UnconnectedRef):
             problem = StrObject(
                 u"Attempt to resolve a far ref handled by " +
                 handler.toString() +
                 u"to a different identity (" +
-                resolution.toString() + u")")
+                res.toString() + u")")
         else:
-            problem = resolution._problem
-        resolution = DisconnectedRef(self.vat, handler, self.resolutionIdentity,
-                                     problem)
-        self.resolutionBox = FinalSlot(resolution, anyGuard)
+            problem = res._problem
+        res = DisconnectedRef(self.vat, handler, self.resolutionIdentity, problem)
+        self.resolutionBox = FinalSlot(res, anyGuard)
         self.resolutionIdentity = None
 
     def _proxyToString(self):
@@ -222,7 +214,7 @@ class RemotePromise(Proxy):
     may resolve to a FarRef, a near object, or become broken.
 
     Until it is resolved, synchronous calls are prohibited and message sends
-    are delivered to the ref's message handler. After resolution calls and
+    are delivered to the ref's message handler. After resolution, calls and
     sends are both forwarded to the resolution object.
     """
 

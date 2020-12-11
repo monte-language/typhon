@@ -74,6 +74,18 @@ def isNear(ref):
         return True
 
 
+def optProblem(ref):
+    if isinstance(ref, Promise):
+        return ref.optProblem()
+    return NullObject
+
+
+def stateOf(ref):
+    if isinstance(ref, Promise):
+        return ref.state()
+    return NEAR
+
+
 @autohelp
 @audited.DF
 class RefOps(Object):
@@ -105,9 +117,12 @@ class RefOps(Object):
 
     @method("Any", "Any")
     def optProblem(self, ref):
-        if isinstance(ref, Promise):
-            return ref.optProblem()
-        return NullObject
+        """
+        The problem which broke `ref`, if it is a broken promise, or `null`
+        otherwise.
+        """
+
+        return optProblem(ref)
 
     @method("Str", "Any")
     def state(self, o):
@@ -115,11 +130,7 @@ class RefOps(Object):
         Determine the resolution state of an object.
         """
 
-        if isinstance(o, Promise):
-            s = o.state()
-        else:
-            s = NEAR
-        return s.repr
+        return stateOf(o).repr
 
     @method("List", guard="Any")
     def promise(self, guard=None):
@@ -665,22 +676,15 @@ class Promise(Object):
 
     # Promise API.
 
-    def resolutionRef(self):
-        return self
-
+    # The most resolved version of this promise. Subclasses will usually
+    # override this hook, but the default implementation is not bad.
     def resolution(self):
-        result = self.resolutionRef()
-        if self is result:
-            return result
-        elif isinstance(result, Promise):
-            return result.resolution()
-        else:
-            return result
+        return self
 
     def state(self):
         if self.optProblem() is not NullObject:
             return BROKEN
-        target = self.resolutionRef()
+        target = self.resolution()
         if self is target:
             return EVENTUAL
         else:
@@ -702,13 +706,55 @@ class SwitchableRef(Promise):
 
     def __init__(self, vat):
         self.vat = vat
-        self._buf = []
+        self._messageBuf = []
+
+    # NB: Recursion is possible here. To avoid it, we deliberately imagine our
+    # call to resolution(self._target) as re-entrant upon this method, in the
+    # case when we have multiple SwitchableRefs in a row. This allows us to
+    # amortize the consumption of refs. Specifically:
+    # * Suppose that we have N SwitchableRefs in a row. SwitchableRefs are the
+    #   only possible non-trivial branch nodes that resolve in an immediate
+    #   near manner for user-level code, so they are the only relevant case.
+    # * N is too big; if we recurse N times, we will overflow the RPython
+    #   stack, and this is forbidden by assumption.
+    # * But we might notice after a constant number c=2 of calls that we are
+    #   potentially headed down such a chain. We could halt the recursion and
+    #   return a partially-resolved target.
+    # * The user-level code doing the resolution will send M messages to the
+    #   not-fully-resolved target. this will create N-c=N-2 extra vat turns
+    #   where M messages are copied in extra work from SwitchableRef to
+    #   SwitchableRef down the chain.
+    # * Suppose that we perform this split N times over N different user-level
+    #   actions. Then, on one hand, we perform M×N² amount of work, but we
+    #   amortize it across N calls. This should be linear performance.
+    def _resolveMore(self):
+        # This implies that self._target is not None and also that self._buf
+        # is None. This is enough to reconstruct the following trickery from
+        # case analysis; these are the only possibilities.
+        if self.isSwitchable:
+            return self
+        assert not self.isSwitchable, "resolute"
+
+        while isinstance(self._target, SwitchableRef):
+            if self is self._target:
+                raise userError(u"Ref loop while coalescing switched promises")
+            elif self._target.isSwitchable:
+                self = self._target
+                break
+            else:
+                self._target = self._target._target
+        else:
+            # There aren't any other cases that nasty, right? So we shouldn't
+            # build up that many stack frames here.
+            self._target = resolution(self._target)
+        # Callers may need to adjust their sense of self.
+        return self
 
     def toString(self):
+        self = self._resolveMore()
         if self.isSwitchable:
             return u"<switchable promise>"
         else:
-            self.resolutionRef()
             return self._target.toString()
 
     def computeHash(self, depth):
@@ -717,93 +763,70 @@ class SwitchableRef(Promise):
         return Object.computeHash(self, depth)
 
     def callAll(self, atom, args, namedArgs):
+        self = self._resolveMore()
         if self.isSwitchable:
             raise userError(u"not synchronously callable (%s)" %
                     atom.repr.decode("utf-8"))
         else:
-            self.resolutionRef()
             return self._target.callAtom(atom, args, namedArgs)
 
     def sendAll(self, atom, args, namedArgs):
+        self = self._resolveMore()
         if self.isSwitchable:
             p, r = makePromise()
-            self._buf.append((r, atom, args, namedArgs))
+            self._messageBuf.append((r, atom, args, namedArgs))
             return p
         else:
-            self.resolutionRef()
             return self.vat.send(self._target, atom, args, namedArgs)
 
     def sendAllOnly(self, atom, args, namedArgs):
+        self = self._resolveMore()
         if self.isSwitchable:
-            self._buf.append((None, atom, args, namedArgs))
+            self._messageBuf.append((None, atom, args, namedArgs))
         else:
-            self.resolutionRef()
             self.vat.sendOnly(self._target, atom, args, namedArgs)
         return NullObject
 
     def optProblem(self):
+        self = self._resolveMore()
         if self.isSwitchable:
             return NullObject
-        elif isinstance(self._target, Promise):
-            self.resolutionRef()
-            return self._target.optProblem()
         else:
-            return NullObject
-
-    def resolutionRef(self):
-        if self.isSwitchable:
-            return self
-        elif isinstance(self._target, Promise):
-            self._target = self._target.resolutionRef()
-        return self._target
+            return optProblem(self._target)
 
     def state(self):
+        self = self._resolveMore()
         if self.isSwitchable:
             return EVENTUAL
-        elif isinstance(self._target, Promise):
-            self.resolutionRef()
-            return self._target.state()
         else:
-            return NEAR
+            return stateOf(self._target)
 
     def isResolved(self):
+        self = self._resolveMore()
         if self.isSwitchable:
             return False
         else:
-            self.resolutionRef()
             return isResolved(self._target)
+
+    def resolution(self):
+        self = self._resolveMore()
+        if self.isSwitchable:
+            return self
+        else:
+            return self._target
 
     def _become(self, newTarget):
         assert self.isSwitchable, "goodnight"
         self.isSwitchable = False
         self._target = newTarget
-        self._buf = None
+        self._messageBuf = None
 
     def setTargetAndCommit(self, newTarget):
         if not self.isSwitchable:
             raise userError(u"No longer switchable")
 
-        # Coalesce multiple switches in a chain.
-        while isinstance(newTarget, SwitchableRef):
-            if self is newTarget:
-                raise userError(u"Ref loop while coalescing switched promises")
-
-            if newTarget.isSwitchable:
-                # Hard branch: Copy ourselves into the target switch.
-                self._buf.extend(newTarget._buf)
-                newTarget._buf = self._buf
-                # Commit ourselves to the new target, so that anybody pointing
-                # to us can chase the pointer. (Our methods will still work.)
-                self._become(newTarget)
-                # And we're done, actually; there's nothing to deliver since
-                # we are now switchable and don't have a new target to set.
-                return
-            else:
-                # Easy branch: Shorten the pointer chain.
-                newTarget = newTarget._target
-
         # Deliver buffered messages.
-        for resolver, atom, args, namedArgs in self._buf:
+        for resolver, atom, args, namedArgs in self._messageBuf:
             if resolver is None:
                 self.vat.sendOnly(newTarget, atom, args, namedArgs)
             else:
@@ -893,9 +916,6 @@ class LocalVatRef(Promise):
             return target
         return self
 
-    def resolutionRef(self):
-        return self
-
     def isResolved(self):
         return True
 
@@ -904,6 +924,12 @@ class LocalVatRef(Promise):
 
 
 class UnconnectedRef(Promise):
+    """
+    A broken reference.
+
+    Rather than a value, this promise refers to a problem which caused it to
+    become broken.
+    """
 
     def __init__(self, vat, problem):
         assert isinstance(problem, Object)
@@ -932,9 +958,6 @@ class UnconnectedRef(Promise):
 
     def optProblem(self):
         return self._problem
-
-    def resolutionRef(self):
-        return self
 
     def _doBreakage(self, atom, args, namedArgs):
         from typhon.objects.collections.maps import EMPTY_MAP
