@@ -286,7 +286,7 @@ def main(_argv,
             }
         }
     } else { localTraceToPNG(Timer, entropy, w, h, solid) }
-    when (png) ->
+    return when (png) ->
         traceln(`Created PNG of ${png.size()}b`)
         when (makeFileResource("sdf.png")<-setContents(png)) ->
             currentProcess.interrupt()
