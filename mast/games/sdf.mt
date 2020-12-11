@@ -136,8 +136,8 @@ def copyCSGTo(ref) as DeepFrozen:
         match [verb, args, namedArgs]:
             M.send(ref, verb, args, namedArgs)
 
-def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool, nproc) as DeepFrozen:
-    traceln(`Tracing solid: $solid`)
+def distributedTraceToPNG(Timer, entropy, width :Int, height :Int, solid, vp, pool, nproc) as DeepFrozen:
+    traceln(`Tracing solid with $nproc workers: $solid`)
     # def config := samplerConfig.QuasirandomMonteCarlo(3)
     def config := samplerConfig.Center()
     def cost := config(costOfConfig) * solid(costOfSolid) * width * height
@@ -171,11 +171,8 @@ def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool, nproc) as D
         }
     })
 
-    # XXX local drawing is still far faster than ~3 workers in parallel
-    def localDrawable := drawSDF(solid(asSDF(makeSimplexNoise.fromShuffledIndices(indices))))
-    addWorkerRef(localDrawable)
-    readyResolver.resolveRace(null)
-
+    # Start them.
+    vp.connectWorkers(nproc)
     traceln("Waiting for workers to connect…")
     return when (ready) ->
         traceln("Got workers, starting work!")
@@ -196,6 +193,39 @@ def traceToPNG(Timer, entropy, width :Int, height :Int, solid, pool, nproc) as D
         def runs := [for _ in (0..nproc) go<-()]
         when (promiseAllFulfilled(runs)) ->
             drawer.finish()
+
+def localTraceToPNG(Timer, entropy, width :Int, height :Int, solid) as DeepFrozen:
+    traceln(`Tracing solid locally: $solid`)
+    # def config := samplerConfig.QuasirandomMonteCarlo(3)
+    def config := samplerConfig.Center()
+    def cost := config(costOfConfig) * solid(costOfSolid) * width * height
+    traceln(`Cost: $cost (log-cost: ${cost.asDouble().logarithm()})`)
+    # Prepare some noise. lib/noise explains how to do this.
+    def indices := entropy.shuffle(_makeList.fromIterable(0..!(2 ** 10)))
+
+    def drawableRef := drawSDF(solid(asSDF(makeSimplexNoise.fromShuffledIndices(indices))))
+    def drawer := makePNG.drawingFrom(drawableRef, config)(width, height)
+
+    # Just run every pixel at once, and then monitor progress in callbacks.
+    def start := Timer.unsafeNow()
+    var i := 0
+    def doneResolver := def done
+    def progress():
+        escape ej:
+            drawer.next(ej)
+            progress<-()
+        catch _:
+            doneResolver.resolve(null)
+        i += 1
+        if (i % 2000 == 0):
+            def duration := Timer.unsafeNow() - start
+            def pixelsPerSecond := i / duration
+            def timeRemaining := ((width * height) - i) / pixelsPerSecond
+            def normPixels := `(${(pixelsPerSecond * cost).logarithm()} work/s)`
+            traceln(`Status: ${(i * 100) / (width * height)}% ($pixelsPerSecond px/s) $normPixels (${timeRemaining}s left)`)
+    progress<-()
+    return when (done) ->
+        drawer.finish()
 
 # XXX cribbed from tools/repl, craves to share code with montec
 
@@ -239,21 +269,25 @@ def main(_argv,
     def w := 320
     def h := 180
     def solid := study(expandCSG)
-    def muffin := getBootMuffin(makeFileResource)
-    def which := makeWhich(makeProcess,
-                           makePathSearcher(makeFileResource,
-                                            currentProcess.getEnvironment()[b`PATH`]))
-    def nproc := getNumberOfProcessors(which("nproc"))
-    traceln("Waiting for boot muffin…")
-    return when (muffin) ->
-        traceln("Got boot muffin!")
-        def pool := makeAMPPool(muffin, ep)
-        when (pool, nproc) ->
-            traceln(`Pool is ready, starting $nproc workers…`)
-            vp.connectWorkers(nproc)
-            def png := traceToPNG(Timer, entropy, w, h, solid, pool, nproc)
-            when (png) ->
-                traceln(`Created PNG of ${png.size()}b`)
-                when (makeFileResource("sdf.png")<-setContents(png)) ->
-                    currentProcess.interrupt()
-                    0
+    def distributeWork :Bool := false
+    def png := if (distributeWork) {
+        def which := makeWhich(makeProcess,
+                               makePathSearcher(makeFileResource,
+                                                currentProcess.getEnvironment()[b`PATH`]))
+        def nproc := getNumberOfProcessors(which("nproc"))
+        def muffin := getBootMuffin(makeFileResource)
+        traceln("Waiting for boot muffin…")
+        when (muffin) -> {
+            traceln("Got boot muffin!")
+            def pool := makeAMPPool(muffin, ep)
+            when (pool, nproc) -> {
+                traceln(`Pool is ready, starting $nproc workers…`)
+                distributedTraceToPNG(Timer, entropy, w, h, solid, vp, pool, nproc)
+            }
+        }
+    } else { localTraceToPNG(Timer, entropy, w, h, solid) }
+    when (png) ->
+        traceln(`Created PNG of ${png.size()}b`)
+        when (makeFileResource("sdf.png")<-setContents(png)) ->
+            currentProcess.interrupt()
+            0
