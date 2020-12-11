@@ -6,7 +6,7 @@ from typhon.autohelp import autohelp, method
 from typhon.nano.interp import InterpObject
 from typhon.objects.collections.lists import wrapList
 from typhon.objects.collections.maps import monteMap
-from typhon.objects.data import IntObject, StrObject, unwrapBytes, wrapBytes
+from typhon.objects.data import DoubleObject, IntObject, StrObject, unwrapBytes, wrapBytes
 from typhon.objects.root import Object
 
 
@@ -139,6 +139,37 @@ def makeReactorStats():
 
 
 @autohelp
+class TimerStats(Object):
+    """
+    How Typhon has been using its time.
+
+    When Typhon exits certain critical sections, it measures the cumulative
+    elapsed time spent in those sections. This includes time spent taking vat
+    turns and waiting for I/O.
+    """
+
+    __immutable__ = True
+
+    def __init__(self, sections):
+        self.sections = sections
+
+    @method("Map")
+    def getSections(self):
+        "A map from section names to the relative amount of time spent."
+        rv = monteMap()
+        for k, v in self.sections.items():
+            rv[wrapBytes(k)] = DoubleObject(v)
+        return rv
+
+
+def makeTimerStats():
+    from typhon.metrics import globalRecorder
+    recorder = globalRecorder()
+    sections = recorder.getTimings()
+    return TimerStats(sections)
+
+
+@autohelp
 class ConfigConfig(Object):
     """
     Allow changing some settings of the runtime.
@@ -175,17 +206,31 @@ class CurrentRuntime(Object):
 
     @method("Any")
     def getCrypt(self):
+        "Get platform-specific cryptographic tools."
         from typhon.objects.crypt import Crypt
         return Crypt()
 
     @method("Any")
     def getHeapStatistics(self):
+        """
+        Take a snapshot of the heap.
+
+        The snapshot is taken unsafely and immediately, but does not permit
+        dereferencing. Only the types and sizes of objects are recorded.
+        """
         return makeHeapStats()
 
     @method("Any")
     def getReactorStatistics(self):
+        "Take a snapshot of the reactor."
         return makeReactorStats()
 
     @method("Any")
+    def getTimerStatistics(self):
+        "Take a snapshot of how time has been spent."
+        return makeTimerStats()
+
+    @method("Any")
     def getConfiguration(self):
+        "Access Typhon's internal configuration."
         return ConfigConfig(self._config)

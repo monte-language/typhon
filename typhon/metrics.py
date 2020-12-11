@@ -1,6 +1,6 @@
 from __future__ import division
 
-from time import time
+from time import clock
 
 from rpython.rlib.debug import debug_print
 from rpython.rlib.listsort import make_timsort_class
@@ -65,10 +65,10 @@ class Recorder(object):
         self.contextStack = []
 
     def start(self):
-        self.startTime = time()
+        self.startTime = clock()
 
     def stop(self):
-        self.endTime = time()
+        self.endTime = clock()
 
     def addTiming(self, label, elapsed):
         if label not in self.timings:
@@ -76,10 +76,10 @@ class Recorder(object):
         self.timings[label] += elapsed
 
     def startSegment(self):
-        self.currentSegment = time()
+        self.currentSegment = clock()
 
     def finishSegment(self):
-        elapsed = time() - self.currentSegment
+        elapsed = clock() - self.currentSegment
         self.addTiming(self.contextStack[-1], elapsed)
 
     def pushContext(self, label):
@@ -109,6 +109,17 @@ class Recorder(object):
         items = self.scripts.items()
         ScriptSorter(items).sort()
         return items[:10]
+
+    def getTimings(self):
+        total = clock() - self.startTime
+        rv = {}
+        unaccounted = 1.0
+        for label, timing in self.timings.items():
+            section = timing / total
+            unaccounted -= section
+            rv[label] = section
+        rv["unaccounted"] = unaccounted
+        return rv
 
     def printResults(self):
         total = self.endTime - self.startTime
