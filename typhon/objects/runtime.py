@@ -1,7 +1,7 @@
 from rpython.rlib import rgc
-from rpython.rlib.rerased import new_erasing_pair
+from rpython.rtyper.lltypesystem import rffi
 
-# from typhon import ruv
+from typhon import ruv
 from typhon.autohelp import autohelp, method
 from typhon.nano.interp import InterpObject
 from typhon.objects.collections.lists import wrapList
@@ -93,20 +93,39 @@ def makeHeapStats():
     return heap
 
 
+# Prebuild a container for loop handles, so that we can use it for
+# preallocated storage.
+class LoopWalker(object):
+    def __init__(self):
+        self.handles = []
+loopWalker = LoopWalker()
+
+# Callback for ruv.walk().
+def walkCB(handle, _):
+    loopWalker.handles.append(handle)
+
 @autohelp
 class LoopHandle(Object):
     """
-    A handle.
+    A low-level reactor handle.
     """
 
     def __init__(self, handle):
         self.handle = handle
 
-def walkCB(handle, erased):
-    l = uneraseList(erased)
-    l.append(handle)
+    @method("Bool")
+    def isActive(self):
+        """
+        Whether the reactor is actively considering this handle.
+        """
+        return ruv.isActive(self.handle)
 
-eraseList, uneraseList = new_erasing_pair("handleList")
+    @method("Bool")
+    def isClosing(self):
+        """
+        Whether the reactor is trying to finalize this handle.
+        """
+        return ruv.isClosing(self.handle)
 
 @autohelp
 class LoopStats(Object):
@@ -122,9 +141,10 @@ class LoopStats(Object):
 
     @method("List")
     def getHandles(self):
-        l = []
-        # ruv.walk(self.loop, walkCB, eraseList(l))
-        return [LoopHandle(h) for h in l]
+        handles = loopWalker.handles = []
+        ruv.walk(self.loop, walkCB, None)
+        loopWalker.handles = []
+        return [LoopHandle(h) for h in handles]
 
 
 def makeReactorStats():
