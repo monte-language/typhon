@@ -21,7 +21,6 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import Ejecting, UserException, userError
 from typhon.objects.auditors import deepFrozenStamp
-from typhon.objects.constants import NullObject
 from typhon.objects.root import Object
 
 
@@ -113,7 +112,6 @@ class Vat(Object):
                         "." + atom.verb.encode('utf-8') + "(" +
                         ', '.join([toString(a).encode('utf-8')
                                    for a in args]) + ")")
-        return NullObject
 
     def checkpoint(self, points=1):
         # If we're immortal, then pass. Otherwise, if we can perform the
