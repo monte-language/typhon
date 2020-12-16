@@ -21,21 +21,36 @@ def clear_gcflag_extra(fromlist):
             rgc.toggle_gcflag_extra(gcref)
             pending.extend(rgc.get_rpy_referents(gcref))
 
-def getMonteObjects():
+def getHeapObjects():
+    """
+    Iterate through the heap.
+
+    We return two lists. The first is a list of Monte objects. The second is a
+    list of (name, size) pairs.
+
+    The division lets us ask Monte objects for their name and size using
+    .getDisplayName() and .sizeOf(); we can't do that during GC iteration.
+    """
     roots = [gcref for gcref in rgc.get_rpy_roots() if gcref]
     pending = roots[:]
-    result_w = []
+    objs = []
+    lls = []
     while pending:
         gcref = pending.pop()
         if not rgc.get_gcflag_extra(gcref):
             rgc.toggle_gcflag_extra(gcref)
             w_obj = rgc.try_cast_gcref_to_instance(Object, gcref)
             if w_obj is not None:
-                result_w.append(w_obj)
+                objs.append(w_obj)
+            else:
+                clsIndex = rgc.get_rpy_type_index(gcref)
+                name = u"~%d" % clsIndex
+                size = rgc.get_rpy_memory_usage(gcref)
+                lls.append((name, size))
             pending.extend(rgc.get_rpy_referents(gcref))
     clear_gcflag_extra(roots)
     rgc.assert_no_more_gcflags()
-    return result_w
+    return objs, lls
 
 
 @autohelp
@@ -51,22 +66,29 @@ class Heap(Object):
         self.buckets = {}
         self.sizes = {}
 
-    def accountObject(self, obj):
-        if isinstance(obj, InterpObject):
-            name = obj.getDisplayName()
-        else:
-            name = obj.__class__.__name__.decode("utf-8")
+    def accountObject(self, name, size):
         if name not in self.buckets:
             self.buckets[name] = 0
             self.sizes[name] = 0
         self.buckets[name] += 1
-        sizeOf = obj.sizeOf()
-        self.sizes[name] += sizeOf
+        self.sizes[name] += size
         self.objectCount += 1
-        self.memoryUsage += sizeOf
+        self.memoryUsage += size
+
+    def accountMonteObject(self, obj):
+        if isinstance(obj, InterpObject):
+            name = obj.getDisplayName()
+        else:
+            name = obj.__class__.__name__.decode("utf-8")
+        self.accountObject(name, obj.sizeOf())
 
     @method("Map")
     def getBuckets(self):
+        """
+        Memory usage by object type.
+
+        Bucket names starting with ~ reflect internal interpreter structures.
+        """
         d = monteMap()
         for name, count in self.buckets.items():
             size = self.sizes.get(name, -1)
@@ -88,8 +110,11 @@ def makeHeapStats():
     """
 
     heap = Heap()
-    for obj in getMonteObjects():
-        heap.accountObject(obj)
+    objs, lls = getHeapObjects()
+    for obj in objs:
+        heap.accountMonteObject(obj)
+    for name, size in lls:
+        heap.accountObject(name, size)
     return heap
 
 
