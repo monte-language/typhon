@@ -438,31 +438,52 @@ class DoubleObject(Object):
 
     @method("Double", "Double")
     def approxDivide(self, divisor):
-        return self._d / divisor
+        try:
+            return self._d / divisor
+        except ZeroDivisionError:
+            return NAN
 
     @method("Double", "Int", _verb="approxDivide")
     def approxDivideInt(self, divisor):
-        return self._d / divisor
+        try:
+            return self._d / divisor
+        except ZeroDivisionError:
+            return NAN
 
     @method("Double", "BigInt", _verb="approxDivide")
     def approxDivideBigInt(self, divisor):
-        return self._d / divisor.tofloat()
+        try:
+            return self._d / divisor.tofloat()
+        except ZeroDivisionError:
+            return NAN
 
     @method("Int", "Double")
     def floorDivide(self, divisor):
-        return int(math.floor(self._d / divisor))
+        try:
+            return int(math.floor(self._d / divisor))
+        except ZeroDivisionError:
+            raise userError(u"floorDivide/1: Integer division by zero")
 
     @method("Int", "Int", _verb="floorDivide")
     def floorDivideInt(self, divisor):
-        return int(math.floor(self._d / divisor))
+        try:
+            return int(math.floor(self._d / divisor))
+        except ZeroDivisionError:
+            raise userError(u"floorDivide/1: Integer division by zero")
 
     @method("Int", "BigInt", _verb="floorDivide")
     def floorDivideBigInt(self, divisor):
-        return int(math.floor(self._d / divisor.tofloat()))
+        try:
+            return int(math.floor(self._d / divisor.tofloat()))
+        except ZeroDivisionError:
+            raise userError(u"floorDivide/1: Integer division by zero")
 
     @method("Double", "Double")
     def mod(self, divisor):
-        return self._d - divisor * math.floor(self._d / divisor)
+        try:
+            return self._d - divisor * math.floor(self._d / divisor)
+        except ZeroDivisionError:
+            return NAN
 
     @method("Double", "Double")
     def pow(self, exponent):
