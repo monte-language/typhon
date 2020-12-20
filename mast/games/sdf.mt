@@ -209,13 +209,8 @@ def localTraceToPNG(Timer, entropy, width :Int, height :Int, solid) as DeepFroze
     # Just run every pixel at once, and then monitor progress in callbacks.
     def start := Timer.unsafeNow()
     var i := 0
-    def doneResolver := def done
-    def progress():
-        escape ej:
-            drawer.next(ej)
-            progress<-()
-        catch _:
-            doneResolver.resolve(null)
+    while (true):
+        drawer.next(__break)
         i += 1
         if (i % 2000 == 0):
             def duration := Timer.unsafeNow() - start
@@ -223,9 +218,7 @@ def localTraceToPNG(Timer, entropy, width :Int, height :Int, solid) as DeepFroze
             def timeRemaining := ((width * height) - i) / pixelsPerSecond
             def normPixels := `(${(pixelsPerSecond * cost).logarithm()} work/s)`
             traceln(`Status: ${(i * 100) / (width * height)}% ($pixelsPerSecond px/s) $normPixels (${timeRemaining}s left)`)
-    progress<-()
-    return when (done) ->
-        drawer.finish()
+    return drawer.finish()
 
 # XXX cribbed from tools/repl, craves to share code with montec
 
@@ -268,7 +261,7 @@ def main(_argv,
     def vp := makeVampEndpoint(currentProcess, makeProcess, b`127.0.0.1`, port)
     def w := 320
     def h := 180
-    def solid := study(expandCSG)
+    def solid := sines(expandCSG)
     def distributeWork :Bool := false
     def png := if (distributeWork) {
         def which := makeWhich(makeProcess,
