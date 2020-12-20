@@ -1484,7 +1484,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
 
     def start(ej):
         acceptEOLs()
-        return if (["import", "exports"].contains(peekTag())):
+        return if (["import", "parameter", "exports"].contains(peekTag())):
             module_(ej)
         else:
             seq(true, ej)

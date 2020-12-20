@@ -22,8 +22,8 @@ def MONTE_KEYWORDS :DeepFrozen := RESERVED_WORDS | [
     "as", "bind", "break", "catch", "continue", "def", "else", "escape",
     "exit", "extends", "exports", "finally", "fn", "for", "guards", "if",
     "implements", "import", "in", "interface", "match", "meta", "method",
-    "object", "pass", "pragma", "return", "switch", "to", "try", "var",
-    "via", "when", "while",
+    "object", "parameter", "pass", "pragma", "return", "switch", "to", "try",
+    "var", "via", "when", "while",
 ].asSet()
 
 def composite(name, data, span) as DeepFrozen:

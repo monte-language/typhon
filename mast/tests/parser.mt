@@ -396,11 +396,11 @@ def test_QuasiliteralPattern(assert):
 def test_SuchThatPattern(assert):
     assert.equal(pattern("x :y ? (1)"), ta`SuchThatPattern(FinalPattern(NounExpr("x"), NounExpr("y")), LiteralExpr(1))`)
 
-def test_bareModule(assert):
-    assert.equal(module("object foo {}"), ta`Module([], [], [], ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], Script(null, [], [])))`)
+def test_moduleParams(assert):
+    assert.equal(module("parameter foo\nexports ()\n1"), ta`Module([], [FinalPattern(NounExpr("foo"), null)], [], LiteralExpr(1))`)
 
 def test_moduleExports(assert):
-    assert.equal(module("exports (a)\ndef a := 1"), ta`Module([], [], ["a"], DefExpr(FinalPattern(NounExpr("a"), null), null, LiteralExpr(1)))`)
+    assert.equal(module("exports (a)\ndef a := 1"), ta`Module([], [], [NounExpr("a")], DefExpr(FinalPattern(NounExpr("a"), null), null, LiteralExpr(1)))`)
 
 def test_module(assert):
     assert.equal(module("import \"foo\" =~ foo\nimport \"blee\" =~ [=> a, => b]\nexports (a)\ndef a := 1"), ta`Module([Import("foo", FinalPattern(NounExpr("foo"), null)), Import("blee", MapPattern([MapPatternImport(FinalPattern(NounExpr("a"), null), null), MapPatternImport(FinalPattern(NounExpr("b"), null), null)], null))], [], [NounExpr("a")], DefExpr(FinalPattern(NounExpr("a"), null), null, LiteralExpr(1)))`)
@@ -422,5 +422,6 @@ unittest([
     test_FinalPattern, test_VarPattern, test_BindPattern, test_SamePattern,
     test_NotSamePattern, test_SlotPattern, test_BindingPattern,
     test_ViaPattern, test_ListPattern, test_MapPattern,
-    test_QuasiliteralPattern, test_SuchThatPattern, test_module,
+    test_QuasiliteralPattern, test_SuchThatPattern,
+    test_moduleParams, test_moduleExports, test_module,
 ])
