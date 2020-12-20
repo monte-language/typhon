@@ -97,6 +97,7 @@ def main(_argv,
             catch problem:
                 traceln.exception(problem)
                 log(`Couldn't instantiate $petname`)
+                Ref.broken(problem)
 
         to instantiateModule(basePath :Str, petname :Str) :Vow[DeepFrozen]:
             "

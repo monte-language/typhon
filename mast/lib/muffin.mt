@@ -89,14 +89,13 @@ def makeFileLoader(rootedLoader) as DeepFrozen:
                 def bs := rootedLoader(`$petname.$extension`)
                 when (bs) ->
                     escape ej:
-                        def rv := loader(bs, petname, ej)
-                        if (rv == null) { go() } else { rv }
+                        loader(bs, petname, ej)
                     catch parseProblem:
                         Ref.broken(parseProblem)
                 catch _:
                     go()
             catch _:
-                null
+                Ref.broken("No loaders succeeded")
         return go()
 
 # And now the muffin maker.
