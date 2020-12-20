@@ -1,11 +1,10 @@
+```
+import "lib/argv" =~ [=> flags]
 import "lib/entropy/entropy" =~ [=> makeEntropy]
 import "lib/samplers" =~ [=> samplerConfig, => costOfConfig]
 import "lib/csg" =~ [=> CSG, => expandCSG, => costOfSolid]
 import "lib/promises" =~ [=> makeSemaphoreRef, => makeLoadBalancingRef]
-import "lib/codec/utf8" =~ [=> UTF8]
-import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
-import "lib/monte/monte_parser" =~ [=> parseModule]
-import "lib/muffin" =~ [=> makeLimo]
+import "lib/muffin" =~ [=> makeFileLoader, => makeLimo]
 import "lib/noise" =~ [=> makeSimplexNoise]
 import "lib/csg" =~ [=> asSDF, => drawSDF]
 import "lib/amp" =~ [=> makeAMPPool]
@@ -14,11 +13,22 @@ import "lib/nproc" =~ [=> getNumberOfProcessors]
 import "lib/vamp" =~ [=> makeVampEndpoint]
 import "fun/png" =~ [=> makePNG]
 exports (main)
+```
 
+This module implements a basic raytracer built upon the theory of
+[constructive solid
+geometry](https://en.wikipedia.org/wiki/Constructive_solid_geometry). We take
+expressions in a simple applicative mini-language and compile them into
+[signed distance
+functions](https://en.wikipedia.org/wiki/Signed_distance_function), this
+module's namesake. We then repeatedly evaluate the function in order to
+discover where the geometry is and how to illuminate it.
+
+There's a bunch of old demonstration geometry that needs to be cleaned up.
+
+```
 # Use the normal to show the gradient.
 def debugNormal :DeepFrozen := CSG.Lambert(CSG.Normal(), CSG.Color(0.1, 0.1, 0.1))
-# Use the gradient to show the gradient.
-def debugGradient :DeepFrozen := CSG.Lambert(CSG.Gradient(), CSG.Color(0.1, 0.1, 0.1))
 # http://devernay.free.fr/cours/opengl/materials.html
 # A basic rubber material. Note that, unlike Kilgard's rubber, we put the
 # color in the diffuse component instead of specular; rubber *does* absorb
@@ -39,12 +49,6 @@ def emerald :DeepFrozen := CSG.Phong(
     CSG.Color(0.07568, 0.61424, 0.07568),
     CSG.Color(0.0215, 0.1745, 0.0215),
     76.8,
-)
-def jade :DeepFrozen := CSG.Phong(
-    CSG.Color(0.316228, 0.316228, 0.316228),
-    CSG.Color(0.54, 0.89, 0.63),
-    CSG.Color(0.135, 0.2225, 0.1575),
-    12.8,
 )
 # def ivory := makeMatte([0.6, 0.3, 0.1], V(0.4, 0.4, 0.3), 50.0)
 def ivory :DeepFrozen := CSG.Phong(
@@ -100,9 +104,6 @@ def crystal :DeepFrozen := CSG.OrthorhombicClamp(CSG.Difference(
 # Imitation tinykaboom.
 def kaboom :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0, debugNormal),
     CSG.Noise(3.4, 3.4, 3.4, 5), 3.0)
-# More imitation tinykaboom, but deterministic and faster.
-def sines :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0, jade),
-    CSG.Sines(5.0, 5.0, 5.0), 3.0)
 # tinyraytracer.
 def tinytracer :DeepFrozen := CSG.Union(
     CSG.Translation(CSG.Sphere(100.0, rubber(green)), 0.0, -110.0, 0.0), [
@@ -130,7 +131,31 @@ def morningstar :DeepFrozen := {
 }
 # A poor blade of grass.
 def grass :DeepFrozen := CSG.Bend(CSG.Cylinder(2.0, 0.5, rubber(green)), 0.1)
+```
 
+We will need to load Monte source code. We'll load the code as muffin modules,
+using the newer loader.
+
+```
+def gettingMuffin(makeFileResource) as DeepFrozen:
+    return def getMuffin(base :Str, top :Str):
+        def loader := makeFileLoader(fn name {
+            makeFileResource(`$base/$name`)<-getContents()
+        })
+        def limo := makeLimo(loader)
+        return when (def p := loader(top)) ->
+            def [source :NullOk[Str], expr] := p
+            limo(top, source, expr)
+        catch problem:
+            traceln.exception(problem)
+            throw(problem)
+```
+
+We need two copies of the pixel-scheduling loop. The first copy is distributed
+and shares work across many subprocesses. It's not (yet) fast enough to make
+up for overhead, though, so it's disabled by default.
+
+```
 def copyCSGTo(ref) as DeepFrozen:
     return object copier:
         match [verb, args, namedArgs]:
@@ -194,6 +219,13 @@ def distributedTraceToPNG(Timer, entropy, width :Int, height :Int, solid, vp, po
         when (promiseAllFulfilled(runs)) ->
             drawer.finish()
 
+def port :Int := 9876
+```
+
+And we have a local pixel-scheduler which simply runs every pixel, one by one,
+in a tight loop.
+
+```
 def localTraceToPNG(Timer, entropy, width :Int, height :Int, solid) as DeepFrozen:
     traceln(`Tracing solid locally: $solid`)
     # def config := samplerConfig.QuasirandomMonteCarlo(3)
@@ -219,68 +251,68 @@ def localTraceToPNG(Timer, entropy, width :Int, height :Int, solid) as DeepFroze
             def normPixels := `(${(pixelsPerSecond * cost).logarithm()} work/s)`
             traceln(`Status: ${(i * 100) / (width * height)}% ($pixelsPerSecond px/s) $normPixels (${timeRemaining}s left)`)
     return drawer.finish()
+```
 
-# XXX cribbed from tools/repl, craves to share code with montec
+Our entrypoint sets up a context, loads the desired geometry from a Monte
+module, and starts rendering.
 
-def makeFileLoader(root :Str, makeFileResource) as DeepFrozen:
-    return def load(petname :Str):
-        def path := `$root/$petname.mt`
-        def bs := makeFileResource(path)<-getContents()
-        return when (bs) ->
-            escape ej:
-                def source := UTF8.decode(bs, ej)
-                def lex := makeMonteLexer(source, petname)
-                [source, parseModule(lex, astBuilder, ej)]
-            catch parseProblem:
-                traceln(`Had trouble loading module: $parseProblem`)
-                throw(parseProblem)
-
-def getBootMuffin(makeFileResource) as DeepFrozen:
-    def basePath :Str := "mast"
-    def petname :Str := "lib/csg"
-    def loader := makeFileLoader(basePath, makeFileResource)
-    def limo := makeLimo(loader)
-    return when (def p := loader(petname)) ->
-        def [source :NullOk[Str], expr] := p
-        limo(petname, source, expr)
-    catch problem:
-        traceln.exception(problem)
-        throw(problem)
-
-def port :Int := 9876
-
-def main(_argv,
+```
+def main(argv,
          => currentProcess, => makeProcess,
          => currentRuntime,
          => makeFileResource,
          => Timer,
          => makeTCP4ServerEndpoint) as DeepFrozen:
-    currentRuntime.getConfiguration().setLoggingTags([b`serious`, b`process`])
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
-    def ep := makeTCP4ServerEndpoint(port)
-    def vp := makeVampEndpoint(currentProcess, makeProcess, b`127.0.0.1`, port)
-    def w := 320
-    def h := 180
-    def solid := sines(expandCSG)
-    def distributeWork :Bool := false
+    var outPath := "sdf.png"
+    var w := 160
+    var h := 100
+    var distributeWork :Bool := false
+    def parser := flags () out path {
+        outPath := path
+    } size s {
+        def `@{via (_makeInt) nw}x@{via (_makeInt) nh}` := s
+        # Dimensions can only be assigned atomically.
+        w := nw
+        h := nh
+    } multiprocess {
+        distributeWork := true
+    }
+    def [_, _, csgBase :Str, csgName :Str] := parser(argv)
+    traceln(`Will load $csgName from $csgBase and render ${w}x$h PNG to $outPath (multiprocessing? $distributeWork)`)
+    def getMuffin := gettingMuffin(makeFileResource)
+    def csgSource := getMuffin(csgBase, csgName)
+    def solid := when (csgSource) -> {
+        def csgModule := eval(csgSource, safeScope)
+        csgModule(null)["geometry"](CSG)(expandCSG)
+    }
     def png := if (distributeWork) {
+        # Debug subprocessing.
+        currentRuntime.getConfiguration().setLoggingTags([b`serious`, b`process`])
+        def ep := makeTCP4ServerEndpoint(port)
+        def vp := makeVampEndpoint(currentProcess, makeProcess, b`127.0.0.1`, port)
         def which := makeWhich(makeProcess,
                                makePathSearcher(makeFileResource,
                                                 currentProcess.getEnvironment()[b`PATH`]))
         def nproc := getNumberOfProcessors(which("nproc"))
-        def muffin := getBootMuffin(makeFileResource)
+        def muffin := getMuffin("mast", "lib/csg")
         traceln("Waiting for boot muffin…")
         when (muffin) -> {
             traceln("Got boot muffin!")
             def pool := makeAMPPool(muffin, ep)
-            when (pool, nproc) -> {
+            when (solid, pool, nproc) -> {
                 traceln(`Pool is ready, starting $nproc workers…`)
                 distributedTraceToPNG(Timer, entropy, w, h, solid, vp, pool, nproc)
             }
         }
-    } else { localTraceToPNG(Timer, entropy, w, h, solid) }
+    } else {
+        when (solid) -> { localTraceToPNG(Timer, entropy, w, h, solid) }
+    }
     return when (png) ->
         traceln(`Created PNG of ${png.size()}b`)
-        when (makeFileResource("sdf.png")<-setContents(png)) ->
-            currentProcess.interrupt()
+        when (makeFileResource(outPath)<-setContents(png)) ->
+            # If we have subprocesses, then we'll just kill ourselves and
+            # that'll kill them too.
+            if (distributeWork) { currentProcess.interrupt() }
             0
+```
