@@ -1,4 +1,3 @@
-import "lib/asdl" =~ [=> buildASDLModule]
 import "lib/codec/utf8" =~ [=> UTF8]
 import "lib/commandLine" =~ [=> makePrompt]
 import "lib/console" =~ [=> consoleDraw]
@@ -6,9 +5,7 @@ import "lib/graphing" =~ [=> calculateGraph]
 import "lib/help" =~ [=> help]
 import "lib/iterators" =~ [=> async]
 import "lib/json" =~ [=> JSON]
-import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
-import "lib/monte/monte_parser" =~ [=> parseModule]
-import "lib/muffin" =~ [=> makeLimo]
+import "lib/muffin" =~ [=> makeFileLoader, => makeLimo]
 import "lib/which" =~ [=> makePathSearcher, => makeWhich]
 exports (main)
 
@@ -53,80 +50,6 @@ def readEvalPrintLoop(prompt, &locals, unsealException) as DeepFrozen:
                 go<-()
     go()
 
-def loadPlain(file :Bytes, petname, ej) as DeepFrozen:
-    def s := UTF8.decode(file, ej)
-    def lex := makeMonteLexer(s, petname)
-    return [s, parseModule(lex, astBuilder, ej), "Monte source"]
-
-# XXX factor with mast/montec all of these custom loaders.
-
-def stripMarkdown(s :Str) :Str as DeepFrozen:
-    var skip :Bool := true
-    def lines := [].diverge()
-    for line in (s.split("\n")):
-        # If we are to skip a line, push a blank line in order to create 2D
-        # space and keep the spans the same as they were.
-        if (line == "```"):
-            lines.push("")
-            skip := !skip
-        else:
-            lines.push(skip.pick("", line))
-    # Parser bug: We usually need to end with a newline.
-    lines.push("")
-    return "\n".join(lines)
-
-def loadLiterate(file :Bytes, petname, ej) as DeepFrozen:
-    def s := stripMarkdown(UTF8.decode(file, ej))
-    def lex := makeMonteLexer(s, petname)
-    return [s, parseModule(lex, astBuilder, ej), "Monte literate source"]
-
-def loadASDL(file :Bytes, petname, ej) as DeepFrozen:
-    def s := UTF8.decode(file, ej)
-    return [s, buildASDLModule(s, petname), "Zephyr ASDL specification"]
-
-def loadMAST(file :Bytes, petname, ej) as DeepFrozen:
-    # XXX readMAST is currently in safeScope, but might be removed; if we need
-    # to import it, it's currently in lib/monte/mast.
-    def expr := readMAST(file, "filename" => petname, "FAIL" => ej)
-    # We don't exactly have original source code. That's okay though; the only
-    # feature that we're missing out on is the self-import technology in
-    # lib/muffin, which we won't need.
-    return [null, expr, "Kernel-Monte packed source"]
-
-def loaders :Map[Str, DeepFrozen] := [
-    "asdl" => loadASDL,
-    "mt.md" => loadLiterate,
-    "mt" => loadPlain,
-    # Always try MAST after Monte source code! Protect users from stale MAST.
-    "mast" => loadMAST,
-]
-
-def makeFileLoader(log, root :Str, makeFileResource) as DeepFrozen:
-    return def load(petname :Str):
-        def it := loaders._makeIterator()
-        def go():
-            return escape noMoreLoaders:
-                def [extension, loader] := it.next(noMoreLoaders)
-                def path := `$root/$petname.$extension`
-                def bs := makeFileResource(path)<-getContents()
-                when (bs) ->
-                    log(`Read file: $path`)
-                    escape ej:
-                        def rv := loader(bs, petname, ej)
-                        if (rv == null) { go() } else {
-                            def [source, expr, description] := rv
-                            log(`Loaded $description: $path`)
-                            [source, expr]
-                        }
-                    catch parseProblem:
-                        log(`Problem parsing $path: $parseProblem`)
-                        throw(parseProblem)
-                catch _:
-                    go()
-            catch _:
-                null
-        return go()
-
 def main(_argv,
          => currentProcess,
          => makeFileResource,
@@ -164,7 +87,9 @@ def main(_argv,
             filesystem for the module library.
             "
 
-            def loader := makeFileLoader(log, basePath, makeFileResource)
+            def loader := makeFileLoader(fn name {
+                makeFileResource(`$basePath/$name`)<-getContents()
+            })
             def limo := makeLimo(loader)
             return when (def p := loader(petname)) ->
                 def [source :NullOk[Str], expr] := p
