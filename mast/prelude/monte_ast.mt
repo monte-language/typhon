@@ -285,8 +285,10 @@ def makeScopeWalker() as DeepFrozenStamp:
         if (nodeName == "Import"):
             s(getStaticScope(node.getPattern()))
         if (nodeName == "Module"):
-            def interiorScope := (sumScopes([for im in (node.getImports())
-                                             im.getPattern()]) +
+            def incomingPatts := [for im in (node.getImports()) {
+                im.getPattern()
+            }] + node.getParameters()
+            def interiorScope := (sumScopes(incomingPatts) +
                                   getStaticScope(node.getBody()))
             def exportListScope := sumScopes(node.getExports())
             def exportScope := makeStaticScope(
