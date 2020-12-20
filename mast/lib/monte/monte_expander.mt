@@ -597,6 +597,21 @@ def expand(node, builder, fail) as DeepFrozen:
             [callExpr(n, "withDefault", [k, default], [], span), v]
 
 
+    def namedParamImport(pattern, default, span):
+        def k := if (pattern.getNodeName() == "BindingPattern") {
+            litExpr("&&" + pattern.getNoun().getName(), span)
+        ## via (_slotToBinding) &&foo
+        } else if (pattern.getNodeName() == "ViaPattern" &&
+                   pattern.getExpr().getNodeName() == "NounExpr" &&
+                   pattern.getExpr().getName() == "_slotToBinding" &&
+                   pattern.getPattern().getNodeName() == "BindingPattern") {
+            litExpr("&" + pattern.getPattern().getNoun().getName(), span)
+        } else if (["BindPattern", "VarPattern", "FinalPattern"].contains(pattern.getNodeName())) {
+            litExpr(pattern.getNoun().getName(), span)
+        }
+        return builder.NamedParam(k, pattern, default, span)
+
+
     def expandTransformer(node, _maker, args, span):
         # traceln(`expander: ${node.getNodeName()}: Expanding $node`)
 
@@ -667,7 +682,7 @@ def expand(node, builder, fail) as DeepFrozen:
                         [emitList(parts, span)], [], span),
                     "substitute", [emitList(exprs, span)], [], span)
             match =="Module":
-                def [importsList, exportsList, expr] := args
+                def [importsList, parametersList, exportsList, expr] := args
                 def pkg := tempNounExpr("package", span)
                 # Build the dependency list and import list at the same time.
                 def dependencies := [].diverge()
@@ -678,6 +693,9 @@ def expand(node, builder, fail) as DeepFrozen:
                     importExprs.push(defExpr(im.getPattern(), null,
                         callExpr(pkg, "import", [dependency], [], im.getSpan()),
                         im.getSpan()))
+                def moduleParams := [for patt in (parametersList) {
+                    namedParamImport(patt, null, span)
+                }]
                 def exportExpr := emitMap([for noun in (exportsList)
                                    emitList([litExpr(noun.getName(),
                                                         noun.getSpan()), noun],
@@ -699,7 +717,8 @@ def expand(node, builder, fail) as DeepFrozen:
                     nounExpr("DeepFrozen", span), [],
                     builder.Script(null,
                          [builder."Method"(null, "run",
-                                           [plainPatt(pkg, span)], [], DFMap,
+                                           [plainPatt(pkg, span)],
+                                           moduleParams, DFMap,
                                            runBody, span),
                           dependenciesMethod],
                          [], span), span)
@@ -1014,18 +1033,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 builder."Method"(doco, verb, params, namedParams, guard, block, span)
             match =="NamedParamImport":
                 def [pattern, default] := args
-                def k := if (pattern.getNodeName() == "BindingPattern") {
-                    litExpr("&&" + pattern.getNoun().getName(), span)
-                ## via (_slotToBinding) &&foo
-                } else if (pattern.getNodeName() == "ViaPattern" &&
-                           pattern.getExpr().getNodeName() == "NounExpr" &&
-                           pattern.getExpr().getName() == "_slotToBinding" &&
-                           pattern.getPattern().getNodeName() == "BindingPattern") {
-                    litExpr("&" + pattern.getPattern().getNoun().getName(), span)
-                } else if (["BindPattern", "VarPattern", "FinalPattern"].contains(pattern.getNodeName())) {
-                    litExpr(pattern.getNoun().getName(), span)
-                }
-                builder.NamedParam(k, pattern, default, span)
+                namedParamImport(pattern, default, span)
             match =="ForExpr":
                 def [coll, key, value, block, catchPatt, catchBlock] := args
                 expandFor(sw, key, value, coll, block, catchPatt, catchBlock, span)
@@ -1237,10 +1245,15 @@ def expand(node, builder, fail) as DeepFrozen:
         }
 
     def moduleImports(ast, maker, args, span):
-        "Desugar module import-patterns to standard Full-Monte patterns."
+        "
+        Desugar module import-patterns to standard Full-Monte patterns.
+
+        This is so that later desugaring of modules will be able to directly
+        reuse import and parameter patterns without effort.
+        "
 
         if (ast.getNodeName() == "Module"):
-            def [imps, exps, body] := args
+            def [imps, params, exps, body] := args
             def newImps := [for imp in (imps) {
                 def patt := imp.getPattern()
                 if (patt.getNodeName() == "MapPattern" && patt.getTail() == null) {
@@ -1251,7 +1264,7 @@ def expand(node, builder, fail) as DeepFrozen:
                     builder."Import"(imp.getName(), newPatt, imp.getSpan())
                 } else { imp }
             }]
-            return maker(newImps, exps, body, span)
+            return maker(newImps, params, exps, body, span)
 
         return M.call(maker, "run", args + [span], [].asMap())
 

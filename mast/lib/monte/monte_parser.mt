@@ -1463,18 +1463,23 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             importsList.push(builder."Import"(importName, importPattern,
                                               spanFrom(importStart)))
             seqSep(ej)
+        def parametersList := [].diverge()
+        while (true):
+            acceptEOLs()
+            acceptTag("parameter", __break)
+            def paramPatt := pattern(ej)
+            parametersList.push(paramPatt)
+            seqSep(ej)
         def exportsList := if (considerTag("exports", ej)) {
             acceptTag("(", ej)
             def nouns := acceptList(noun)
             acceptTag(")", ej)
             seqSep(ej)
             nouns
-        } else {
-            []
-        }
+        } else { [] }
         def body := seq(true, ej)
         return builder."Module"(importsList.snapshot(),
-                                exportsList, body,
+                                parametersList.snapshot(), exportsList, body,
                                 spanFrom(start))
 
     def start(ej):

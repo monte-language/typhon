@@ -641,8 +641,9 @@ def makeCoreAst() as DeepFrozenStamp:
         "QuasiParserExpr"       => ["name?" => Str, "quasis*" => QuasiPiece],
         "ValueHoleExpr"         => ["index" => Int],
         "PatternHoleExpr"       => ["index" => Int],
-        "Module"                => ["imports*" => Import_, "exports*" => Noun,
-                                    "body" => Expr],
+        "Module"                => ["imports*" => Import_,
+                                    "parameters*" => Pattern,
+                                    "exports*" => Noun, "body" => Expr],
     ],
     "Pattern" => [
         "IgnorePattern"      => ["guard?" => Expr],

@@ -88,8 +88,8 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
         def rv := switch (node.getNodeName()) {
             # Modules
             match =="Module" {
-                def [importsList, _exportsList, body] := args
-                def incoming := flattenList(importsList)
+                def [importsList, parametersList, _exportsList, body] := args
+                def incoming := flattenList(importsList) + flattenList(parametersList)
                 def l := filterNouns(incoming, usedSet(sw, node.getBody()))
                 def s := {
                     var rv := [].asSet()
