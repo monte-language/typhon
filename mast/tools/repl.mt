@@ -91,13 +91,7 @@ def main(_argv,
                 makeFileResource(`$basePath/$name`)<-getContents()
             })
             def limo := makeLimo(loader)
-            return when (def p := loader(petname)) ->
-                def [source :NullOk[Str], expr] := p
-                limo(petname, source, expr)
-            catch problem:
-                traceln.exception(problem)
-                log(`Couldn't instantiate $petname`)
-                Ref.broken(problem)
+            return limo.topLevel(petname)
 
         to instantiateModule(basePath :Str, petname :Str) :Vow[DeepFrozen]:
             "

@@ -145,7 +145,7 @@ def makeLimo(load) as DeepFrozen:
         => unittest,
     ].diverge()
 
-    def limo
+    def _limo
 
     def loadAll(pns):
         def pending := [].diverge()
@@ -153,61 +153,71 @@ def makeLimo(load) as DeepFrozen:
             if (!mods.contains(pn)):
                 def p := when (def loaded := load<-(pn)) -> {
                     def [s, expr] := loaded
-                    limo<-(pn, s, expr)
+                    _limo<-(pn, s, expr)
                 }
                 mods[pn] := p
             pending.push(mods[pn])
         return promiseAllFulfilled(pending)
 
-    return bind limo(name, source :NullOk[Str], expr) :Vow[DeepFrozen]:
-        "
-        Compile a module into a muffin. Muffins are Monte expressions which
-        represent modules but do not have any imports.
+    object limo:
+        to run(name :Str, source :NullOk[Str], expr) :Vow[DeepFrozen]:
+            "
+            Compile a module into a muffin. Muffins are Monte expressions which
+            represent modules but do not have any imports.
 
-        `expr` is Monte code for a module with petname `name` and optional
-        source code `source`.
-        "
+            `expr` is Monte code for a module with petname `name` and optional
+            source code `source`.
+            "
 
-        def [deps, wantsMeta :Bool] := getDependencies(expr)
-        return when (loadAll(deps)) ->
-            def depExpr := astBuilder.MapExpr([for pn in (deps) {
-                def key := astBuilder.LiteralExpr(pn, null)
-                def value :DeepFrozen := mods[pn]
-                astBuilder.MapExprAssoc(key, value, null)
-            }], null)
-            def ls := if (source != null) {
-                astBuilder.LiteralExpr(source, null)
-            } else { m`null` }
-            def importBody := if (wantsMeta) {
-                m`if (petname == "meta") {
-                    def source :NullOk[Str] := $ls
-                    object this as DeepFrozen {
-                        method module() { mod }
-                        method ast() :NullOk[DeepFrozen] {
-                            if (source != null) { ::"m````".fromStr(source) }
+            def [deps, wantsMeta :Bool] := getDependencies(expr)
+            return when (loadAll(deps)) ->
+                def depExpr := astBuilder.MapExpr([for pn in (deps) {
+                    def key := astBuilder.LiteralExpr(pn, null)
+                    def value :DeepFrozen := mods[pn]
+                    astBuilder.MapExprAssoc(key, value, null)
+                }], null)
+                def ls := if (source != null) {
+                    astBuilder.LiteralExpr(source, null)
+                } else { m`null` }
+                def importBody := if (wantsMeta) {
+                    m`if (petname == "meta") {
+                        def source :NullOk[Str] := $ls
+                        object this as DeepFrozen {
+                            method module() { mod }
+                            method ast() :NullOk[DeepFrozen] {
+                                if (source != null) { ::"m````".fromStr(source) }
+                            }
+                            method source() :NullOk[Str] { source }
                         }
-                        method source() :NullOk[Str] { source }
-                    }
-                    [=> this]
+                        [=> this]
+                    } else {
+                        deps[petname](null)
+                    }`
                 } else {
-                    deps[petname](null)
+                    m`deps[petname](null)`
+                }
+                def instance := mods[name] := m`{
+                    def deps :Map[Str, DeepFrozen] := { $depExpr }
+                    def makePackage(mod :DeepFrozen) as DeepFrozen {
+                        return def package."import"(petname :Str) as DeepFrozen {
+                            return $importBody
+                        }
+                    }
+                    object _ as DeepFrozen {
+                        to dependencies() { return [] }
+                        to run(_package) {
+                            def mod := { $expr }
+                            return mod(makePackage(mod))
+                        }
+                    }
                 }`
-            } else {
-                m`deps[petname](null)`
-            }
-            def instance := mods[name] := m`{
-                def deps :Map[Str, DeepFrozen] := { $depExpr }
-                def makePackage(mod :DeepFrozen) as DeepFrozen {
-                    return def package."import"(petname :Str) as DeepFrozen {
-                        return $importBody
-                    }
-                }
-                object _ as DeepFrozen {
-                    to dependencies() { return [] }
-                    to run(_package) {
-                        def mod := { $expr }
-                        return mod(makePackage(mod))
-                    }
-                }
-            }`
-            instance
+                instance
+
+        to topLevel(petname :Str) :Vow[DeepFrozen]:
+            "Compile `petname`, a top-level module, using the configured loader."
+            return when (def p := load(petname)) ->
+                def [source :NullOk[Str], expr] := p
+                limo(petname, source, expr)
+
+    bind _limo := limo
+    return limo

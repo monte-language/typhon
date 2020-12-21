@@ -1,21 +1,6 @@
 import "lib/argv" =~ [=> flags]
-import "lib/codec/utf8" =~ [=> UTF8]
-import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
-import "lib/monte/monte_parser" =~ [=> parseModule]
-import "lib/muffin" =~ [=> makeLimo]
+import "lib/muffin" =~ [=> makeFileLoader, => makeLimo]
 exports (main)
-
-def makeFileLoader(root, makeFileResource) as DeepFrozen:
-    return def load(petname):
-        def path := `$root/$petname.mt`
-        traceln(`loading module $path`)
-        def bs := makeFileResource(path)<-getContents()
-        return when (bs) ->
-            def s := UTF8.decode(bs, null)
-            def lex := makeMonteLexer(s, petname)
-            [s, parseModule(lex, astBuilder, null)]
-
-def basePath :Str := "mast"
 
 def addTyphonHarness(expr :DeepFrozen, name :Str) :DeepFrozen as DeepFrozen:
     def topname :DeepFrozen := astBuilder.LiteralExpr(name, null)
@@ -84,8 +69,12 @@ def harnesses :Map[Str, DeepFrozen] := [
     "closed" => closeExpression,
 ]
 
+def basePath :Str := "mast"
+
 def main(argv, => makeFileResource) as DeepFrozen:
-    def loader := makeFileLoader(basePath, makeFileResource)
+    def loader := makeFileLoader(fn name {
+        makeFileResource(`$basePath/$name`)<-getContents()
+    })
     def limo := makeLimo(loader)
     var harness :Str := "closed"
     def parser := flags () typhon {
@@ -95,15 +84,13 @@ def main(argv, => makeFileResource) as DeepFrozen:
     }
     def [pn, out] := parser(argv)
     traceln(`Making muffin out of $pn`)
-    return when (def p := loader(pn)) ->
-        def [source, expr] := p
-        when (var m := limo(pn, source, expr)) ->
-            m := harnesses[harness](m, pn)
-            def context := makeMASTContext()
-            traceln("Expanding…")
-            def expanded := m.expand()
-            traceln("Writing MAST…")
-            context(expanded)
-            when (makeFileResource(out)<-setContents(context.bytes())) ->
-                traceln("all done")
-                0
+    return when (var m := limo.topLevel(pn)) ->
+        m := harnesses[harness](m, pn)
+        def context := makeMASTContext()
+        traceln("Expanding…")
+        def expanded := m.expand()
+        traceln("Writing MAST…")
+        context(expanded)
+        when (makeFileResource(out)<-setContents(context.bytes())) ->
+            traceln("all done")
+            0

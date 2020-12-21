@@ -143,12 +143,7 @@ def gettingMuffin(makeFileResource) as DeepFrozen:
             makeFileResource(`$base/$name`)<-getContents()
         })
         def limo := makeLimo(loader)
-        return when (def p := loader(top)) ->
-            def [source :NullOk[Str], expr] := p
-            limo(top, source, expr)
-        catch problem:
-            traceln.exception(problem)
-            throw(problem)
+        return limo.topLevel(top)
 ```
 
 We need two copies of the pixel-scheduling loop. The first copy is distributed
