@@ -4,7 +4,7 @@ import "lib/entropy/entropy" =~ [=> makeEntropy]
 import "lib/samplers" =~ [=> samplerConfig, => costOfConfig]
 import "lib/csg" =~ [=> CSG, => expandCSG, => costOfSolid]
 import "lib/promises" =~ [=> makeSemaphoreRef, => makeLoadBalancingRef]
-import "lib/muffin" =~ [=> makeFileLoader, => makeLimo]
+import "lib/muffin" =~ [=> makeFileLoader, => loadTopLevelMuffin]
 import "lib/noise" =~ [=> makeSimplexNoise]
 import "lib/csg" =~ [=> asSDF, => drawSDF]
 import "lib/amp" =~ [=> makeAMPPool]
@@ -142,8 +142,7 @@ def gettingMuffin(makeFileResource) as DeepFrozen:
         def loader := makeFileLoader(fn name {
             makeFileResource(`$base/$name`)<-getContents()
         })
-        def limo := makeLimo(loader)
-        return limo.topLevel(top)
+        return loadTopLevelMuffin(loader, top)
 ```
 
 We need two copies of the pixel-scheduling loop. The first copy is distributed
@@ -279,7 +278,7 @@ def main(argv,
     def csgSource := getMuffin(csgBase, csgName)
     def solid := when (csgSource) -> {
         def csgModule := eval(csgSource, safeScope)
-        csgModule(null)["geometry"](CSG)(expandCSG)
+        csgModule(null, => CSG)["geometry"](expandCSG)
     }
     def png := if (distributeWork) {
         # Debug subprocessing.

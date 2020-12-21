@@ -1,5 +1,5 @@
 import "lib/argv" =~ [=> flags]
-import "lib/muffin" =~ [=> makeFileLoader, => makeLimo]
+import "lib/muffin" =~ [=> makeFileLoader, => loadTopLevelMuffin]
 exports (main)
 
 def addTyphonHarness(expr :DeepFrozen, name :Str) :DeepFrozen as DeepFrozen:
@@ -75,7 +75,6 @@ def main(argv, => makeFileResource) as DeepFrozen:
     def loader := makeFileLoader(fn name {
         makeFileResource(`$basePath/$name`)<-getContents()
     })
-    def limo := makeLimo(loader)
     var harness :Str := "closed"
     def parser := flags () typhon {
         harness := "typhon"
@@ -84,7 +83,7 @@ def main(argv, => makeFileResource) as DeepFrozen:
     }
     def [pn, out] := parser(argv)
     traceln(`Making muffin out of $pn`)
-    return when (var m := limo.topLevel(pn)) ->
+    return when (var m := loadTopLevelMuffin(loader, pn)) ->
         m := harnesses[harness](m, pn)
         def context := makeMASTContext()
         traceln("Expanding…")

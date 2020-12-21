@@ -5,7 +5,7 @@ import "lib/graphing" =~ [=> calculateGraph]
 import "lib/help" =~ [=> help]
 import "lib/iterators" =~ [=> async]
 import "lib/json" =~ [=> JSON]
-import "lib/muffin" =~ [=> makeFileLoader, => makeLimo]
+import "lib/muffin" =~ [=> makeFileLoader, => loadTopLevelMuffin]
 import "lib/which" =~ [=> makePathSearcher, => makeWhich]
 exports (main)
 
@@ -90,8 +90,7 @@ def main(_argv,
             def loader := makeFileLoader(fn name {
                 makeFileResource(`$basePath/$name`)<-getContents()
             })
-            def limo := makeLimo(loader)
-            return limo.topLevel(petname)
+            return loadTopLevelMuffin(loader, petname)
 
         to instantiateModule(basePath :Str, petname :Str) :Vow[DeepFrozen]:
             "

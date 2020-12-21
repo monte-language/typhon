@@ -1,8 +1,9 @@
 import "lib/asdl" =~ [=> buildASDLModule]
 import "lib/codec/utf8" =~ [=> UTF8]
+import "lib/freezer" =~ [=> freeze]
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
 import "lib/monte/monte_parser" =~ [=> parseModule]
-exports (makeFileLoader, makeLimo)
+exports (makeFileLoader, loadTopLevelMuffin)
 
 # Turn files into code objects. This kit includes a muffin maker, as well as a
 # reasonable example loader which is used by our top-level compiler and REPL.
@@ -120,104 +121,100 @@ def unittest :DeepFrozen := m`{
     }
 }`
 
-def getDependencies(expr) as DeepFrozen:
-    def module := eval(expr, safeScope)
-    def rv := [].diverge()
-    var wantsMeta := false
-    for dep in (module.dependencies()):
-        if (dep == "meta"):
-            wantsMeta := true
-        else:
-            rv.push(dep)
-    return [rv, wantsMeta]
-
-def makeLimo(load) as DeepFrozen:
+def loadTopLevelMuffin(load, topName :Str) as DeepFrozen:
     "
-    Set up a module compiler.
+    Using `load` as a module loader, load module with petname `topName` and
+    compile it into a module with no dependencies; compile `topName` into a
+    muffin. Muffins are Monte expressions which represent modules but do not
+    have any imports.
 
     `load` is a module loader; it should take petnames as strings and return
     promises for pairs `[source :NullOk[Str], expression]` of source code and
-    evaluatable Monte code objects.
+    Monte code objects.
     "
 
-    def mods := [
-        => bench,
-        => unittest,
-    ].diverge()
+    # Map of petnames to eventual [source, expr, dependencies].
+    def modules := [].asMap().diverge()
+    # Note that registration produces a topological order in the map.
+    def register(petname :Str):
+        if (petname == "bench" || petname == "unittest") { return }
+        return modules.fetch(petname, fn {
+            def r := def loaded
+            when (def p := load(petname)) -> {
+                def [source, expr] := p
+                def dependencies := eval(expr, safeScope).dependencies()
+                def depsFulfilled := promiseAllFulfilled([for pn in (dependencies) {
+                    register(pn)
+                }])
+                when (depsFulfilled) -> {
+                    r.resolve([source, expr, dependencies])
+                } catch problem { r.smash(problem) }
+            } catch problem { r.smash(problem) }
+            modules[petname] := loaded
+        })
 
-    def _limo
-
-    def loadAll(pns):
-        def pending := [].diverge()
-        for pn in (pns):
-            if (!mods.contains(pn)):
-                def p := when (def loaded := load<-(pn)) -> {
-                    def [s, expr] := loaded
-                    _limo<-(pn, s, expr)
-                }
-                mods[pn] := p
-            pending.push(mods[pn])
-        return promiseAllFulfilled(pending)
-
-    object limo:
-        to run(name :Str, source :NullOk[Str], expr) :Vow[DeepFrozen]:
-            "
-            Compile a module into a muffin. Muffins are Monte expressions which
-            represent modules but do not have any imports.
-
-            `expr` is Monte code for a module with petname `name` and optional
-            source code `source`.
-            "
-
-            def [deps, wantsMeta :Bool] := getDependencies(expr)
-            return when (loadAll(deps)) ->
-                def depExpr := astBuilder.MapExpr([for pn in (deps) {
-                    def key := astBuilder.LiteralExpr(pn, null)
-                    def value :DeepFrozen := mods[pn]
-                    astBuilder.MapExprAssoc(key, value, null)
-                }], null)
-                def ls := if (source != null) {
-                    astBuilder.LiteralExpr(source, null)
-                } else { m`null` }
-                def importBody := if (wantsMeta) {
-                    m`if (petname == "meta") {
-                        def source :NullOk[Str] := $ls
-                        object this as DeepFrozen {
-                            method module() { mod }
-                            method ast() :NullOk[DeepFrozen] {
-                                if (source != null) { ::"m````".fromStr(source) }
-                            }
-                            method source() :NullOk[Str] { source }
-                        }
-                        [=> this]
-                    } else {
-                        deps[petname](null)
-                    }`
-                } else {
-                    m`deps[petname](null)`
-                }
-                def instance := mods[name] := m`{
-                    def deps :Map[Str, DeepFrozen] := { $depExpr }
-                    def makePackage(mod :DeepFrozen) as DeepFrozen {
-                        return def package."import"(petname :Str) as DeepFrozen {
-                            return $importBody
-                        }
+    return when (def p := register(topName)) ->
+        def [_source, expr, dependencies] := p
+        # It could well happen that the module already is a muffin. In
+        # that case, nothing special needs to be done.
+        if (dependencies.isEmpty()) { expr } else {
+            # Get the modules in the right order. This is a basic topological
+            # sort, ala Tarjan.
+            def sorted := [].diverge()
+            var seen := ["unittest", "bench"].asSet()
+            while (!modules.isEmpty()) {
+                # Find a module who has no dependencies left and use it next.
+                sorted.push(escape ej {
+                    for n => [s, e, ds] in (modules) {
+                        if (!(seen >= ds.asSet())) { continue }
+                        seen with= (n)
+                        modules.removeKey(n)
+                        ej([n, s, e, ds])
                     }
-                    object _ as DeepFrozen {
-                        to dependencies() { return [] }
-                        to run(_package) {
-                            def mod := { $expr }
-                            return mod(makePackage(mod))
-                        }
-                    }
+                    throw(`Cycle in remaining modules: ${modules.getKeys()}`)
+                })
+            }
+            # Boot each module in order. We give each module a package with
+            # exactly the already-booted modules that it wants, and also all
+            # of the module parameters.
+            # XXX use source to implement meta imports
+            def boots := [for [n, _s, e, ds] in (sorted) {
+                m`{
+                    def mods := [for k in (${freeze(ds)}) k => loaded[k]]
+                    def package."import"(k) { return mods[k] }
+                    loaded[${freeze(n)}] := M.call({ $e }, "run",
+                                                   [package], moduleParams)
                 }`
-                instance
+            }]
+            # Because of the way that the modules are registered, the final
+            # module to be booted is always the desired top-level module.
+            m`object _ as DeepFrozen {
+                to dependencies() { return [] }
+                match [=="run", [_package], moduleParams] {
+                    def loaded := [
+                        "bench" => ["bench" => $bench],
+                        "unittest" => ["unittest" => $unittest],
+                    ].diverge(Str, DeepFrozen)
+                    ${astBuilder.SeqExpr(boots, null)}
+                }
+            }`
+        }
 
-        to topLevel(petname :Str) :Vow[DeepFrozen]:
-            "Compile `petname`, a top-level module, using the configured loader."
-            return when (def p := load(petname)) ->
-                def [source :NullOk[Str], expr] := p
-                limo(petname, source, expr)
-
-    bind _limo := limo
-    return limo
+        # XXX use these remains to implement meta imports
+        #         def importBody := if (wantsMeta) {
+        #             m`if (petname == "meta") {
+        #                 def source :NullOk[Str] := $ls
+        #                 object this as DeepFrozen {
+        #                     method module() { mod }
+        #                     method ast() :NullOk[DeepFrozen] {
+        #                         if (source != null) { ::"m````".fromStr(source) }
+        #                     }
+        #                     method source() :NullOk[Str] { source }
+        #                 }
+        #                 [=> this]
+        #             } else {
+        #                 deps[petname](null)
+        #             }`
+        #         } else {
+        #             m`deps[petname](null)`
+        #         }
