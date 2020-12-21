@@ -239,6 +239,11 @@ bind printerActions :Map[Str, DeepFrozen] := [
     },
     "Module" => def printModule(self, out, _priority) as DeepFrozenStamp {
         for im in (self.getImports()) { out.print(im) }
+        for patt in (self.getParameters()) {
+            out.print("parameter ")
+            out.print(patt)
+            out.println("")
+        }
         def exportsList := self.getExports()
         if (exportsList.size() > 0) {
             out.print("exports ")
