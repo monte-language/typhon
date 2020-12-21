@@ -140,7 +140,7 @@ object reader as DeepFrozen:
                         "For-loop body"
                         method run(_, r, _) {
                             ""
-                            reader.Parameter(r)
+                            reader."Parameter"(r)
                         }
 
                     })
@@ -526,7 +526,7 @@ object reader as DeepFrozen:
                                 }
                             }
 
-                            method parameter() {
+                            method "parameter"() {
                                 ""
                                 {
                                     null
@@ -751,7 +751,7 @@ object reader as DeepFrozen:
             }
         }
 
-    method Parameter(root :DeepFrozen):
+    method "Parameter"(root :DeepFrozen):
         ""
         {
             null
@@ -1029,7 +1029,7 @@ object reader as DeepFrozen:
                         "For-loop body"
                         method run(_, r, _) {
                             ""
-                            reader.Parameter(r)
+                            reader."Parameter"(r)
                         }
 
                     })
