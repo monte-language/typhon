@@ -46,10 +46,8 @@ def copyCSGTo(ref) as DeepFrozen:
         match [verb, args, namedArgs]:
             M.send(ref, verb, args, namedArgs)
 
-def distributedTraceToPNG(Timer, entropy, width :Int, height :Int, solid, vp, pool, nproc) as DeepFrozen:
+def distributedTraceToPNG(Timer, entropy, width :Int, height :Int, config, solid, vp, pool, nproc) as DeepFrozen:
     traceln(`Tracing solid with $nproc workers: $solid`)
-    # def config := samplerConfig.QuasirandomMonteCarlo(3)
-    def config := samplerConfig.Center()
     def cost := config(costOfConfig) * solid(costOfSolid) * width * height
     traceln(`Cost: $cost (log-cost: ${cost.asDouble().logarithm()})`)
     # Prepare some noise. lib/noise explains how to do this.
@@ -111,10 +109,8 @@ And we have a local pixel-scheduler which simply runs every pixel, one by one,
 in a tight loop.
 
 ```
-def localTraceToPNG(Timer, entropy, width :Int, height :Int, solid) as DeepFrozen:
+def localTraceToPNG(Timer, entropy, width :Int, height :Int, config, solid) as DeepFrozen:
     traceln(`Tracing solid locally: $solid`)
-    # def config := samplerConfig.QuasirandomMonteCarlo(3)
-    def config := samplerConfig.Center()
     def cost := config(costOfConfig) * solid(costOfSolid) * width * height
     traceln(`Cost: $cost (log-cost: ${cost.asDouble().logarithm()})`)
     # Prepare some noise. lib/noise explains how to do this.
@@ -153,6 +149,7 @@ def main(argv,
     var w := 160
     var h := 100
     var distributeWork :Bool := false
+    var config := samplerConfig.Center()
     def parser := flags () out path {
         outPath := path
     } size s {
@@ -160,11 +157,18 @@ def main(argv,
         # Dimensions can only be assigned atomically.
         w := nw
         h := nh
+    } supersample count {
+        # NB: Since we have no runtime randomness in our SDF and texturing,
+        # the correct way to get a smoothly dithered antialiasing is to use
+        # QMC rather than a fixed pattern; otherwise, we'll see the pattern in
+        # every smooth surface.
+        config := samplerConfig.QuasirandomMonteCarlo(_makeInt(count))
     } multiprocess {
         distributeWork := true
     }
     def [_, _, csgBase :Str, csgName :Str] := parser(argv)
     traceln(`Will load $csgName from $csgBase and render ${w}x$h PNG to $outPath (multiprocessing? $distributeWork)`)
+    traceln(`Sampling configuration: $config`)
     def getMuffin := gettingMuffin(makeFileResource)
     def csgSource := getMuffin(csgBase, csgName)
     def solid := when (csgSource) -> {
@@ -187,11 +191,11 @@ def main(argv,
             def pool := makeAMPPool(muffin, ep)
             when (solid, pool, nproc) -> {
                 traceln(`Pool is ready, starting $nproc workers…`)
-                distributedTraceToPNG(Timer, entropy, w, h, solid, vp, pool, nproc)
+                distributedTraceToPNG(Timer, entropy, w, h, config, solid, vp, pool, nproc)
             }
         }
     } else {
-        when (solid) -> { localTraceToPNG(Timer, entropy, w, h, solid) }
+        when (solid) -> { localTraceToPNG(Timer, entropy, w, h, config, solid) }
     }
     return when (png) ->
         traceln(`Created PNG of ${png.size()}b`)
