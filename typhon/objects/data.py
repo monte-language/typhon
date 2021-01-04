@@ -422,6 +422,11 @@ class DoubleObject(Object):
     def max(self, other):
         return max(self._d, other)
 
+    @method("Double", "Double")
+    def withSignOf(self, other):
+        "This double, but with the sign of its argument."
+        return math.copysign(self._d, other)
+
     @method("Double")
     def abs(self):
         return abs(self._d)
