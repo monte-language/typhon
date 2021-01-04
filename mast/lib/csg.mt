@@ -112,8 +112,8 @@ def estimateNormal(sdf, p) as DeepFrozen:
     def N := glsl.normalize(vp - vn)
 
     # The mean curvature is the amount of "wiggle" or "bend" in the gradient.
-    def k := sumDouble(vp + vn) / (epsilon * scale) ** 2
-    return [N, k]
+    def H := sumDouble(vp + vn) / (epsilon * scale) ** 2
+    return [N, H]
 
 def maxSteps :Int := 100
 
@@ -240,7 +240,7 @@ def drawSDF(sdf) as DeepFrozen:
         # curvature. Note that, even if the point of intersection is
         # relatively precise, the normal and curvature are also approximate
         # because they are numerically estimated.
-        def [N, k] := estimateNormal(sdf, p)
+        def [N, H] := estimateNormal(sdf, p)
         # The depth at the point of intersection, with 0 at the camera and 1
         # at the back wall implied by maxDepth.
         def Z := distance / maxDepth
@@ -248,8 +248,11 @@ def drawSDF(sdf) as DeepFrozen:
         def glance := glsl.dot(dir, N).abs().reciprocal()
         # The width of the fragment projected onto the hit. GLSL has a
         # heuristic for this, but we compute it directly from our projected
-        # cone around the ray.
-        def fradius := (pixelRadius + dRadius * distance) * glance
+        # cone around the ray. Note that spherical excess is directly
+        # proportional to Gauss curvature, which can be estimated from our
+        # mean curvature; this gives us a cheap way to improve area estimates.
+        def K := H ** 2
+        def fradius := (pixelRadius + dRadius * distance) * glance * (1.0 + K)
         def fwidth := fradius * 2.0
 
         def lights := [
@@ -272,7 +275,7 @@ def drawSDF(sdf) as DeepFrozen:
 
             # The reflected cone radius is affected by curvature. We integrate
             # the curvature along the radius of the hit.
-            def RdRadius := dRadius + k * fradius
+            def RdRadius := dRadius + H * fradius
 
             # And recurse to compute reflection.
             def [color, coverage] := castRay(Rp, R, fradius, RdRadius,
