@@ -93,18 +93,16 @@ def estimateNormal(sdf, p) as DeepFrozen:
 def maxSteps :Int := 100
 
 def shortestDistanceToSurface(sdf, eye, direction, end :Double,
-                              pixelRadius :Double) as DeepFrozen:
+                              pixelRadius :Double, dRadius :Double) as DeepFrozen:
     var depth := 0.0
     # Track signs, based on where we've started.
-    # XXX Typhon should give Doubles a method for checking the sign bit!
-    def sign := sdf(eye)[0].belowZero().pick(-1.0, 1.0)
+    def sign := sdf(eye)[0]
     # Best candidate for a hit, if there's been one.
     var best := null
-    var bestError :Double := pixelRadius
     for i in (0..!maxSteps):
         def step := eye + direction * depth
         def [distance, texture] := sdf(step)
-        def signedDistance := distance * sign
+        def signedDistance := distance.withSignOf(sign)
         # traceln(`$i: sdf($eye, $direction, $depth) -> sdf($step) -> $signedDistance`)
 
         # If we took a step and ended up inside the geometry, but we took the
@@ -116,25 +114,25 @@ def shortestDistanceToSurface(sdf, eye, direction, end :Double,
         if (signedDistance.belowZero()):
             return [depth, i, 0.0, texture]
 
-        # We can and should leave as soon as the first hit happens which is
-        # close enough to reasonably occlude the pixel.
-        # NB: In the paper's original algorithm, there's some additional
-        # machinery for checking candidate values, but we go with either the
-        # first hit or nothing.
+        # The error computed here is relatively exact, so we'll compare it
+        # against our expectations.
         def error := signedDistance.abs() / depth
-        if (error < bestError):
-            # traceln(`$i: error $error, threshold $bestError`)
-            best := [depth, i, error, texture]
-            bestError := error
+        # As we move through space, the pixel radius varies with distance. So,
+        # rather than a static best error, we have to compute the first hit
+        # specially.
+        if (error < (pixelRadius + dRadius * distance).abs()):
+            if (best == null || error < best[2]):
+                # traceln(`$i: error $error, threshold $best`)
+                best := [depth, i, error, texture]
 
         # Did we hit the back wall?
         if (depth >= end):
-            return if (best == null) { [end, i, bestError, null] } else { best }
+            return if (best == null) { [end, i, pixelRadius, null] } else { best }
 
         depth += signedDistance
 
     # We ran out of steps. Return the best hit we got, if we got one.
-    return if (best == null) { [end, maxSteps, bestError, null] } else { best }
+    return if (best == null) { [end, maxSteps, pixelRadius, null] } else { best }
 
 def makeRayDirection(fieldOfView :Double) as DeepFrozen:
     "
@@ -185,10 +183,13 @@ def refineEstimate(sdf, eye, dir, distance :Double, pixelRadius :Double) as Deep
     # whichever is better.
     return (secondErr.abs() > firstErr.abs()).pick(distance, t)
 
+def hairWidth :Double := 10e-7
+
 def drawSDF(sdf) as DeepFrozen:
     "Draw signed distance function `sdf`."
 
     def eye :DeepFrozen := V(8.0, 5.0, 7.0)
+    def focusDistance :Double := glsl.length(zero - eye)
     def fov :Double := PI / 8
     def viewToWorld := viewMatrix(eye, zero, V(0.0, 1.0, 0.0))
     def rayDirection := makeRayDirection(fov)
@@ -209,7 +210,8 @@ def drawSDF(sdf) as DeepFrozen:
         def [estimate, steps, error, texture] := shortestDistanceToSurface(sdf, eye,
                                                                            worldDir,
                                                                            maxDepth,
-                                                                           pixelRadius)
+                                                                           pixelRadius,
+                                                                           pixelRadius / focusDistance)
         # Clearly show where there is nothing.
         if (estimate >= maxDepth) { return makeColor.clear() }
         # XXX refineEstimate() could compute coverage-to-alpha information by
@@ -233,7 +235,7 @@ def drawSDF(sdf) as DeepFrozen:
         def N := estimateNormal(sdf, p)
         # The depth at the point of intersection, with 0 at the camera and 1
         # at the back wall implied by maxDepth.
-        def Z := zero * (distance / maxDepth)
+        def Z := one * (distance / maxDepth)
         # The partial derivatives in screen space at the point of
         # intersection.
         def glance := distance * glsl.dot(worldDir, N)
@@ -262,9 +264,11 @@ def drawSDF(sdf) as DeepFrozen:
             # the known intersection point. The maximum distance to travel is
             # to just within a hair of the hit, to avoid acne.
             def v := p - light
-            def lightEnd := glsl.length(v) - 0.000_000_1
+            def lightEnd := glsl.length(v) - hairWidth
+            # The light cone starts at a hair width, and expands over the
+            # distance traveled to the radius of the hit.
             def [lightDistance, _, lightError, _] := shortestDistanceToSurface(sdf,
-                light, glsl.normalize(v), maxDepth, pixelRadius)
+                light, glsl.normalize(v), maxDepth, hairWidth, pixelRadius / lightEnd)
             # Only compute textures if the light isn't occluded; this means
             # that the distance is not less than what we expected.
             if (lightDistance < lightEnd) { continue }
