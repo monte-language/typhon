@@ -120,19 +120,22 @@ def shortestDistanceToSurface(sdf, eye, direction, end :Double,
         # As we move through space, the pixel radius varies with distance. So,
         # rather than a static best error, we have to compute the first hit
         # specially.
-        if (error < (pixelRadius + dRadius * distance).abs()):
-            if (best == null || error < best[2]):
-                # traceln(`$i: error $error, threshold $best`)
-                best := [depth, i, error, texture]
+        def coneRadius := (pixelRadius + dRadius * distance).abs()
+        if (error < coneRadius):
+            # How much of the pixel would be covered by the hit?
+            def coverage :Double := (1.0 - (error / coneRadius)) ** 2
+            if (best == null || coverage > best[2]):
+                # traceln(`$i: error $error, threshold ${best[2]}`)
+                best := [depth, i, coverage, texture]
 
         # Did we hit the back wall?
         if (depth >= end):
-            return if (best == null) { [end, i, pixelRadius, null] } else { best }
+            return if (best == null) { [end, i, 0.0, null] } else { best }
 
         depth += signedDistance
 
     # We ran out of steps. Return the best hit we got, if we got one.
-    return if (best == null) { [end, maxSteps, pixelRadius, null] } else { best }
+    return if (best == null) { [end, maxSteps, 0.0, null] } else { best }
 
 def makeRayDirection(fieldOfView :Double) as DeepFrozen:
     "
@@ -194,24 +197,21 @@ def drawSDF(sdf) as DeepFrozen:
     def viewToWorld := viewMatrix(eye, zero, V(0.0, 1.0, 0.0))
     def rayDirection := makeRayDirection(fov)
 
-    return def drawable.drawAt(u :Double, var v :Double,
+    return def drawable.drawAt(u :Double, v :Double,
                                => aspectRatio :Double,
                                => pixelRadius :Double):
         # NB: Flip vertical axis.
-        v := 1.0 - v
-        # Take our central ray, and also take four rays at edges of the pixel;
-        # we'll need them for estimating partial derivatives later.
-        def worldDir := viewToWorld(rayDirection(u, v, aspectRatio))
-        def worldDirPX := viewToWorld(rayDirection(u + pixelRadius, v, aspectRatio))
-        def worldDirNX := viewToWorld(rayDirection(u - pixelRadius, v, aspectRatio))
-        def worldDirPY := viewToWorld(rayDirection(u, v + pixelRadius, aspectRatio))
-        def worldDirNY := viewToWorld(rayDirection(u, v - pixelRadius, aspectRatio))
+        def worldDir := viewToWorld(rayDirection(u, 1.0 - v, aspectRatio))
 
-        def [estimate, steps, error, texture] := shortestDistanceToSurface(sdf, eye,
-                                                                           worldDir,
-                                                                           maxDepth,
-                                                                           pixelRadius,
-                                                                           pixelRadius / focusDistance)
+        # How quickly the pixel radius shrinks as rays converge towards the
+        # focus (and grows as rays pass the focus!)
+        def dRadius :Double := pixelRadius / focusDistance
+        def [estimate,
+             steps,
+             coverage,
+             texture] := shortestDistanceToSurface(sdf, eye, worldDir,
+                                                   maxDepth, pixelRadius,
+                                                   dRadius)
         # Clearly show where there is nothing.
         if (estimate >= maxDepth) { return makeColor.clear() }
         # XXX refineEstimate() could compute coverage-to-alpha information by
@@ -235,16 +235,14 @@ def drawSDF(sdf) as DeepFrozen:
         def N := estimateNormal(sdf, p)
         # The depth at the point of intersection, with 0 at the camera and 1
         # at the back wall implied by maxDepth.
-        def Z := one * (distance / maxDepth)
-        # The partial derivatives in screen space at the point of
-        # intersection.
-        def glance := distance * glsl.dot(worldDir, N)
-        def dx := (worldDirPX / glsl.dot(worldDirPX, N) -
-                   worldDirNX / glsl.dot(worldDirNX, N)) * glance
-        def dy := (worldDirPY / glsl.dot(worldDirPY, N) -
-                   worldDirNY / glsl.dot(worldDirNY, N)) * glance
-        # The amount of the pixel which the object occludes, in [0,1].
-        def coverage := ((pixelRadius - error) / pixelRadius) ** 2
+        def Z := distance / maxDepth
+        # How much larger the hit becomes due to increasingly glancing hits.
+        def glance := glsl.dot(worldDir, N).abs().reciprocal()
+        # The width of the fragment projected onto the hit. GLSL has a
+        # heuristic for this, but we compute it directly from our projected
+        # cone around the ray.
+        def fradius := (pixelRadius + dRadius * distance) * glance
+        def fwidth := fradius * 2.0
 
         def lights := [
             # Behind the camera, a spotlight.
@@ -258,7 +256,7 @@ def drawSDF(sdf) as DeepFrozen:
         ]
         # The color of the SDF at the distance. This is a function of
         # illuminating the SDF with each light.
-        var color := texture.ambient(p, N, Z, dx, dy)
+        var color := texture.ambient(p, N, Z, fwidth)
         for light => lightColor in (lights):
             # Let's find out how much this light contributes when pointed at
             # the known intersection point. The maximum distance to travel is
@@ -267,17 +265,16 @@ def drawSDF(sdf) as DeepFrozen:
             def lightEnd := glsl.length(v) - hairWidth
             # The light cone starts at a hair width, and expands over the
             # distance traveled to the radius of the hit.
-            def [lightDistance, _, lightError, _] := shortestDistanceToSurface(sdf,
-                light, glsl.normalize(v), maxDepth, hairWidth, pixelRadius / lightEnd)
+            def [lightDistance, _, lightCoverage, _] := shortestDistanceToSurface(sdf,
+                light, glsl.normalize(v), maxDepth, hairWidth, fradius / lightEnd)
             # Only compute textures if the light isn't occluded; this means
             # that the distance is not less than what we expected.
             if (lightDistance < lightEnd) { continue }
 
-            def intensity := ((pixelRadius - lightError) / pixelRadius) ** 2
             # Shadow sharpness; [2,128].
             def shadowK := 2.0
-            def soft := (intensity * shadowK).min(1.0)
-            color += texture(eye, light, p, N, Z, dx, dy) * lightColor * soft
+            def soft := (lightCoverage * shadowK).min(1.0)
+            color += texture(eye, light, p, N, Z, fwidth) * lightColor * soft
 
         # HDR: We wait until the last moment to clamp, but we *do* clamp.
         # Also, coverage to alpha! We'll preunmultiply here.
@@ -316,29 +313,27 @@ def asSDF(noise) as DeepFrozen:
     return object compileSDF:
         to Color(red, green, blue):
             def color := V(red, green, blue)
-            return fn _p, _N, _Z, _dx, _dy { color }
+            return fn _p, _N, _Z, _fwidth { color }
 
         to Normal():
             # Convert the normal, which is in [-1, 1], to be in [0, 1].
-            return fn _p, N, _Z, _dx, _dy { N * 0.5 + 0.5 }
+            return fn _p, N, _Z, _fwidth { N * 0.5 + 0.5 }
 
         to Depth():
-            return fn _p, _N, Z, _dx, _dy { Z }
+            return fn _p, _N, Z, _fwidth { one * Z }
 
         to Gradient():
-            return fn _p, _N, _Z, dx, dy {
-                (V(max(dx.abs()), max(dy.abs()), 0.0) * 4.0).min(1.0).max(0.0)
-            }
+            # Clamp for very wide hits.
+            return fn _p, _N, _Z, fwidth { one * fwidth.min(1.0) }
 
         to Checker():
             # https://www.iquilezles.org/www/articles/filterableprocedurals/filterableprocedurals.htm
             # XXX improved filter could be used from
             # https://www.iquilezles.org/www/articles/morecheckerfiltering/morecheckerfiltering.htm
-            return fn p, _N, _Z, dx, dy {
-                def fwidth := dx.abs().max(dy.abs()) * 0.5
+            return fn p, _N, _Z, fwidth {
                 def i := ((frac((p - fwidth) * 0.5) - 0.5).abs() -
                           (frac((p + fwidth) * 0.5) - 0.5).abs()) / fwidth
-                one * 0.5 * (1.0 - productDouble(i))
+                one * (0.5 * (1.0 - productDouble(i)))
             }
 
         to Marble(red, green, blue):
@@ -346,7 +341,7 @@ def asSDF(noise) as DeepFrozen:
             # to look right, though?
             def exponents := V(red, green, blue)
             def half := one * 0.5
-            return fn p, _N, _Z, dx, dy {
+            return fn p, _N, _Z, _fwidth {
                 def [_, _, z] := V.un(p, null)
                 def n := noise.turbulence(p, 7) * 10.0
                 def grey := (z * 0.5 + n).sine()
@@ -358,12 +353,12 @@ def asSDF(noise) as DeepFrozen:
         to Lambert(flat, ambient):
             # https://en.wikipedia.org/wiki/Lambertian_reflectance
             return object lambertShader {
-                to ambient(p, N, Z, dx, dy) { return ambient(p, N, Z, dx, dy) }
-                to run(_eye, light, p, N, Z, dx, dy) {
+                to ambient(p, N, Z, fwidth) { return ambient(p, N, Z, fwidth) }
+                to run(_eye, light, p, N, Z, fwidth) {
                     def L := glsl.normalize(light - p)
                     def diff := glsl.dot(L, N)
                     return if (diff.belowZero()) { zero } else {
-                        flat(p, N, Z, dx, dy) * diff
+                        flat(p, N, Z, fwidth) * diff
                     }
                 }
             }
@@ -371,14 +366,14 @@ def asSDF(noise) as DeepFrozen:
         to Phong(specular, diffuse, ambient, shininess):
             # https://en.wikipedia.org/wiki/Phong_reflection_model
             return object phongShader {
-                to ambient(p, N, Z, dx, dy) { return ambient(p, N, Z, dx, dy) }
-                to run(eye, light, p, N, Z, dx, dy) {
+                to ambient(p, N, Z, fwidth) { return ambient(p, N, Z, fwidth) }
+                to run(eye, light, p, N, Z, fwidth) {
                     def L := glsl.normalize(light - p)
                     def diff := glsl.dot(L, N)
 
                     return if (diff.belowZero()) { zero } else {
-                        def ks := specular(p, N, Z, dx, dy)
-                        def kd := diffuse(p, N, Z, dx, dy)
+                        def ks := specular(p, N, Z, fwidth)
+                        def kd := diffuse(p, N, Z, fwidth)
                         def R := glsl.normalize(glsl.reflect(-L, N))
                         def base := glsl.dot(R, glsl.normalize(eye - p))
                         def spec := if (base.belowZero()) { 0.0 } else {
