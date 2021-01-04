@@ -294,6 +294,32 @@ def mod(x :Double, y :Double) :Double as DeepFrozen:
 def productTimes(x, y) as DeepFrozen { return x * y }
 def productDouble :DeepFrozen := V.makeFold(1.0, productTimes)
 
+def makeQuaternion(r :Double, i :Double, j :Double, k :Double) as DeepFrozen:
+    "
+    Set up a quaternion rotation from the quaternion with real part `r` and
+    i, j, k components `i`, `j`, and `k`.
+
+    In the common case where the non-real components form a unit vector on
+    their own, then this corresponds to the rotation around that axis with
+    half-angle `1.0.arcTangent(r)`.
+    "
+
+    # https://en.wikipedia.org/wiki/Quaternions_and_spatial_rotation#Quaternion-derived_rotation_matrix
+    def s :Double := 2.0 * (glsl.length(V(r, i, j, k)) ** 2).reciprocal()
+    def R := V(
+        V(1 - s * (j * j + k * k), s * (i * j - k * r), s * (i * k + j * r)),
+        V(s * (i * j + k * r), 1 - s * (i * i + k * k), s * (j * k - i * r)),
+        V(s * (i * k - j * r), s * (j * k + i * r), 1 - s * (i * i + j * j)),
+    )
+    return fn p { sumRow(R * p) }
+
+def makeRotation(theta :Double, axis) as DeepFrozen:
+    "Set up a rotation with angle `theta` around unit vector `axis`."
+
+    def r := (theta / 2.0).tangent().reciprocal()
+    def [i, j, k] := V.un(axis, null)
+    return makeQuaternion(r, i, j, k)
+
 object expandCSG as DeepFrozen:
     "Expand Cube constructors into Boxes."
 
@@ -444,15 +470,8 @@ def asSDF(noise) as DeepFrozen:
             return fn p { shape(p - offset) }
 
         to Rotation(shape, ur :Double, ui :Double, uj :Double, uk :Double):
-            # https://en.wikipedia.org/wiki/Quaternions_and_spatial_rotation#Quaternion-derived_rotation_matrix
-            # XXX wrong!?
-            def R := V(
-                V(1 - 2 * (uj * uj + uk * uk), 2 * (ui * uj - uk * ur), 2 * (ui * uk + uj * ur)),
-                V(2 * (ui * uj + uk * ur), 1 - 2 * (ui * ui + uk * uk), 2 * (uj * uk - ui * ur)),
-                V(2 * (ui * uk - uj * ur), 2 * (uj * uk + ui * ur), 1 - 2 * (ui * ui + uj * uj)),
-            )
-            traceln(`Rotation($ur, $ui, $uj, $uk) -> $R`)
-            return fn p { shape(sumRow(R * p)) }
+            def rotate := makeQuaternion(ur, ui, uj, uk)
+            return fn p { shape(rotate(p)) }
 
         to Scaling(shape, factor :Double):
             return fn p {
