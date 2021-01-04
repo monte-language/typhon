@@ -81,14 +81,39 @@ def epsilonX :DeepFrozen := V(epsilon, 0.0, 0.0)
 def epsilonY :DeepFrozen := V(0.0, epsilon, 0.0)
 def epsilonZ :DeepFrozen := V(0.0, 0.0, epsilon)
 def estimateNormal(sdf, p) as DeepFrozen:
+    "Numerically estimate the normal vector for the zero of `sdf` at `p`."
+
+    # We're going to cheat and also compute curvature at the same time as the
+    # normal. This is possible because we're using finite differences:
+    # * First derivative of f(x) ~ (f(x + e) - f(x - e)) / 2e
+    # * Second derivative of f(x) ~ (f(x + e) + f(x - e) - 2f(x)) / e²
+    # The normal vector is related to the first derivative; it's the vector
+    # which is orthogonal to all tangents (the entire tangent plane). The
+    # mean curvature, a scalar, is also the Laplacian, which is the sum of the
+    # second derivatives on each component. We can avoid computing f(x)
+    # because it should be zero by assumption!
+
     # Hack: Get a much better epsilon by pre-scaling with the (norm of) the
     # zero, see https://en.wikipedia.org/wiki/Numerical_differentiation
     def scale := glsl.length(p)
-    return glsl.normalize(V(
-        sdf(p + epsilonX * scale)[0] - sdf(p - epsilonX * scale)[0],
-        sdf(p + epsilonY * scale)[0] - sdf(p - epsilonY * scale)[0],
-        sdf(p + epsilonZ * scale)[0] - sdf(p - epsilonZ * scale)[0],
-    ))
+    def vp := V(
+        sdf(p + epsilonX * scale)[0],
+        sdf(p + epsilonY * scale)[0],
+        sdf(p + epsilonZ * scale)[0],
+    )
+    def vn := V(
+        sdf(p - epsilonX * scale)[0],
+        sdf(p - epsilonY * scale)[0],
+        sdf(p - epsilonZ * scale)[0],
+    )
+
+    # The normal vector is the unit vector which "stands up" or "points away
+    # from" the gradient. Since we're normalizing, don't bother dividing.
+    def N := glsl.normalize(vp - vn)
+
+    # The mean curvature is the amount of "wiggle" or "bend" in the gradient.
+    def k := sumDouble(vp + vn) / (epsilon * scale) ** 2
+    return [N, k]
 
 def maxSteps :Int := 100
 
@@ -169,75 +194,58 @@ def viewMatrix(eye :DeepFrozen, center, up) as DeepFrozen:
 
 def maxDepth :Double := 500.0
 
-# Do a couple rounds of gradient descent in order to polish an estimated hit.
-# This works about as well as you might expect: After two rounds, the hit is
-# accurate to 1 in 1 million, and three rounds is almost always enough.
-# The error comes from:
-# https://static.aminer.org/pdf/PDF/000/593/434/efficient_antialiased_rendering_of_d_linear_fractals.pdf
-# But it is just the pixel area over the distance traveled!
-def refineEstimate(sdf, eye, dir, distance :Double, pixelRadius :Double) as DeepFrozen:
-    def pixelArea := PI * pixelRadius ** 2
-    # We're only taking two steps, and they're short when unrolled.
-    def firstErr := sdf(eye + dir * distance)[0] - pixelArea / distance
-    def t := distance + firstErr
-    def secondErr := sdf(eye + dir * t)[0] - pixelArea / t
-    # It is quite possible that we're not improving the estimate; that is,
-    # that we are numerically unstable near a divergent fixed point. So return
-    # whichever is better.
-    return (secondErr.abs() > firstErr.abs()).pick(distance, t)
-
+# An epsilon for lighting, useful for avoiding acne.
 def hairWidth :Double := 10e-7
+# The field of vision for the initial camera.
+def fov :Double := PI / 8
+
+# The number of reflections that we will perform.
+def maxRecursion :Int := 1
 
 def drawSDF(sdf) as DeepFrozen:
     "Draw signed distance function `sdf`."
 
-    def eye :DeepFrozen := V(8.0, 5.0, 7.0)
-    def focusDistance :Double := glsl.length(zero - eye)
-    def fov :Double := PI / 8
-    def viewToWorld := viewMatrix(eye, zero, V(0.0, 1.0, 0.0))
-    def rayDirection := makeRayDirection(fov)
+    def castRay(eye, dir, pixelRadius :Double, dRadius :Double,
+                recursionLevel :Int):
+        "
+        Cast a ray from `eye` in the unit direction `dir`.
 
-    return def drawable.drawAt(u :Double, v :Double,
-                               => aspectRatio :Double,
-                               => pixelRadius :Double):
-        # NB: Flip vertical axis.
-        def worldDir := viewToWorld(rayDirection(u, 1.0 - v, aspectRatio))
+        The ray is surrounded by a cone of essential sampling uncertainty. The
+        cone has radius `pixelRadius` at the initial fragment in screen space,
+        and changes by `dRadius`.
 
-        # How quickly the pixel radius shrinks as rays converge towards the
-        # focus (and grows as rays pass the focus!)
-        def dRadius :Double := pixelRadius / focusDistance
+        The `recursionLevel` starts at 0 and determines how many times the ray
+        has been reflected.
+        "
+
         def [estimate,
              steps,
              coverage,
-             texture] := shortestDistanceToSurface(sdf, eye, worldDir,
+             texture] := shortestDistanceToSurface(sdf, eye, dir,
                                                    maxDepth, pixelRadius,
                                                    dRadius)
         # Clearly show where there is nothing.
-        if (estimate >= maxDepth) { return makeColor.clear() }
-        # XXX refineEstimate() could compute coverage-to-alpha information by
-        # returning the error.
-        # def distance := refineEstimate(sdf, eye, worldDir, estimate,
-        #                                pixelRadius)
+        if (estimate >= maxDepth) { return [zero, 0.0] }
         def distance := if (steps >= maxSteps) {
             # Clearly show where we aren't taking enough steps by highlighting
             # with magenta.
-            return makeColor.RGB(1.0, 0.0, 1.0, 1.0)
-            # Refine the estimate using Newton's method; maybe it's alright.
-            refineEstimate(sdf, eye, worldDir, estimate, pixelRadius)
+            return [V(1.0, 0.0, 1.0), 1.0]
         } else { estimate }
 
         # traceln(`hit u=$u v=$v estimate=$estimate distance=$distance steps=$steps`)
 
         # The actual location of the hit after traveling the distance.
-        def p := eye + worldDir * distance
-        # The normal at the point of intersection. Note that, since the
-        # intersection is approximate, the normal is also approximate.
-        def N := estimateNormal(sdf, p)
+        def p := eye + dir * distance
+        # The normal at the point of intersection, as well as the mean
+        # curvature. Note that, even if the point of intersection is
+        # relatively precise, the normal and curvature are also approximate
+        # because they are numerically estimated.
+        def [N, k] := estimateNormal(sdf, p)
         # The depth at the point of intersection, with 0 at the camera and 1
         # at the back wall implied by maxDepth.
         def Z := distance / maxDepth
         # How much larger the hit becomes due to increasingly glancing hits.
-        def glance := glsl.dot(worldDir, N).abs().reciprocal()
+        def glance := glsl.dot(dir, N).abs().reciprocal()
         # The width of the fragment projected onto the hit. GLSL has a
         # heuristic for this, but we compute it directly from our projected
         # cone around the ray.
@@ -248,37 +256,75 @@ def drawSDF(sdf) as DeepFrozen:
             # Behind the camera, a spotlight.
             (eye + one) => one * 0.5,
             # From the right, a fill.
-            V(13.0, 10.0, -5.0) => one * 0.5,
+            V(13.0, 10.0, -5.0) => one * 0.6,
             # From the left, another fill.
-            V(-8.0, 10.0, 10.0) => one * 0.5,
+            V(-8.0, 10.0, 10.0) => one * 0.6,
             # From far above, a gentle ambient light.
             V(-100.0, 1_000.0, 100.0) => one * 0.2,
         ]
-        # The color of the SDF at the distance. This is a function of
-        # illuminating the SDF with each light.
-        var color := texture.ambient(p, N, Z, fwidth)
+        var color := if (recursionLevel < maxRecursion) {
+            # The reflected ray.
+            def R := glsl.reflect(dir, N)
+
+            # The point of reflection. This is the hit, but offset in the
+            # direction of the reflection by a hair to avoid acne.
+            def Rp := p + R * hairWidth
+
+            # The reflected cone radius is affected by curvature. We integrate
+            # the curvature along the radius of the hit.
+            def RdRadius := dRadius + k * fradius
+
+            # And recurse to compute reflection.
+            def [color, coverage] := castRay(Rp, R, fradius, RdRadius,
+                                             recursionLevel + 1)
+            color * coverage
+        # } else { texture.ambient(p, N, Z, fwidth) }
+        # Don't use material-specific ambient light.
+        } else { one * 0.1 }
+        # The color of the SDF at the distance is a function of illuminating
+        # the SDF with each light.
         for light => lightColor in (lights):
             # Let's find out how much this light contributes when pointed at
             # the known intersection point. The maximum distance to travel is
             # to just within a hair of the hit, to avoid acne.
             def v := p - light
-            def lightEnd := glsl.length(v) - hairWidth
+            def lightEnd := glsl.length(v)
             # The light cone starts at a hair width, and expands over the
             # distance traveled to the radius of the hit.
             def [lightDistance, _, lightCoverage, _] := shortestDistanceToSurface(sdf,
-                light, glsl.normalize(v), maxDepth, hairWidth, fradius / lightEnd)
+                light, glsl.normalize(v), lightEnd + hairWidth, hairWidth,
+                fradius / lightEnd)
             # Only compute textures if the light isn't occluded; this means
             # that the distance is not less than what we expected.
-            if (lightDistance < lightEnd) { continue }
+            if (lightDistance < lightEnd - hairWidth) { continue }
 
             # Shadow sharpness; [2,128].
             def shadowK := 2.0
             def soft := (lightCoverage * shadowK).min(1.0)
             color += texture(eye, light, p, N, Z, fwidth) * lightColor * soft
 
+        return [color, coverage]
+
+    def eye :DeepFrozen := V(8.0, 5.0, 7.0)
+    def focusDistance :Double := glsl.length(zero - eye)
+    def viewToWorld := viewMatrix(eye, zero, V(0.0, 1.0, 0.0))
+    def rayDirection := makeRayDirection(fov)
+
+    return def drawable.drawAt(u :Double, v :Double,
+                               => aspectRatio :Double,
+                               => pixelRadius :Double):
+        # NB: Flip vertical axis.
+        def worldDir := viewToWorld(rayDirection(u, 1.0 - v, aspectRatio))
+        # How quickly the pixel radius shrinks as rays converge towards the
+        # focus (and grows as rays pass the focus!)
+        def dRadius := pixelRadius / focusDistance
+
+        def [color, coverage] := castRay(eye, worldDir, pixelRadius, dRadius, 0)
         # HDR: We wait until the last moment to clamp, but we *do* clamp.
         # Also, coverage to alpha! We'll preunmultiply here.
-        def [r, g, b] := _makeList.fromIterable((color / coverage).min(1.0))
+        def rc := coverage.reciprocal()
+        def clamped := (color * rc).min(1.0).max(0.0)
+        def [r, g, b] := V.un(clamped, null)
         return makeColor.RGB(r, g, b, coverage)
 
 # That's it for the code which uses SDFs. Now, for the code which compiles
