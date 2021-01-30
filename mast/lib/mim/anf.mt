@@ -6,17 +6,10 @@ exports (anf, makeNormal)
 def id(x) as DeepFrozen:
     return x
 
-def nounToName(noun) :Str as DeepFrozen:
-    return noun(def extractNoun.NounExpr(name, _) { return name })
-
 def nameForPatt(patt) :NullOk[Str] as DeepFrozen:
     return patt(object pattNamer {
         to IgnorePattern(_, _) { return null }
-        to FinalPattern(noun, _, _) {
-            # XXX fucky input types
-            return if (noun =~ s :Str) { s } else { nounToName(noun) }
-        }
-        to NounExpr(name, _) { return name }
+        to FinalPattern(noun, _, _) { return noun }
     })
 
 def Atom :DeepFrozen := anf.atom()
@@ -100,14 +93,12 @@ def makeNormal() as DeepFrozen:
                             })
                         }
                     }
-                    to BindingPattern(noun, span) {
-                        def name := nounToName(noun)
+                    to BindingPattern(name, span) {
                         return anf.LetExpr(anf.BindingPattern(name, span),
                                            anf.Atom(specimen, span),
                                            k(), span)
                     }
-                    to FinalPattern(noun, guard, span) {
-                        def name := nounToName(noun)
+                    to FinalPattern(name, guard, span) {
                         return if (guard == null) {
                             anf.LetExpr(anf.FinalPattern(name, null, span),
                                         anf.Atom(specimen, span),
@@ -122,8 +113,7 @@ def makeNormal() as DeepFrozen:
                             })
                         }
                     }
-                    to VarPattern(noun, guard, span) {
-                        def name := nounToName(noun)
+                    to VarPattern(name, guard, span) {
                         return if (guard == null) {
                             anf.LetExpr(anf.VarPattern(name, null, span),
                                         anf.Atom(specimen, span),
@@ -275,25 +265,6 @@ def makeNormal() as DeepFrozen:
                         } else {
                             normal.name(ex)(finishDef)
                         }
-                    }
-                    to AssignExpr(lvalue, rvalue, span) {
-                        # XXX should we do this in the expander instead?
-                        def name := nounToName(lvalue)
-                        return normal.name(rvalue)(fn rv {
-                            letsym(anf.Atom(anf.BindingExpr(name, span), span),
-                                   span)(fn binding {
-                                letsym(anf.MethodCallExpr(anf.NounExpr(binding,
-                                                                       span),
-                                                          "get", [], [], span),
-                                       span)(fn slot {
-                                    letsym(anf.MethodCallExpr(anf.NounExpr(slot,
-                                                                           span),
-                                                              "put", [rv], [],
-                                                              span),
-                                           span)(fn _ { k(rv) })
-                                })
-                            })
-                        })
                     }
                     to SeqExpr(exprs, span) {
                         return normal.names(exprs)(fn ns {

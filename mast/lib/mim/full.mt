@@ -1,10 +1,10 @@
 import "lib/mim/syntax/full" =~ ["ASTBuilder" => monteBuilder]
 exports (monteBuilder, rebuild, expand)
 
-def rebuild(ast :DeepFrozen) as DeepFrozen:
+def rebuild(ast :DeepFrozen, expander) as DeepFrozen:
     def rebuilder(node, _maker, args, span):
         def verb := node.getNodeName()
-        return M.call(monteBuilder, verb, args.with(span), [].asMap())
+        return M.call(expander, verb, args.with(span), [].asMap())
     return ast.transform(rebuilder)
 
 def rangeOps :Map[Str, Str] := [
@@ -39,8 +39,12 @@ def nounName.NounExpr(name :Str, _span) :Str as DeepFrozen:
 
 def mb :DeepFrozen := monteBuilder
 def expand(ast :DeepFrozen) as DeepFrozen:
+    # Recursion patterns:
+    # ex() takes m`` literals of Full-Monte and interpolates them
+    # xp is an AST builder which does macro expansions
+    # mb is an AST builder which only allows kernel expressions
     def ex :DeepFrozen := expand
-    object xp as DeepFrozen:
+    object xp extends mb as DeepFrozen:
         to FunCallExpr(receiver, args, namedArgs, span):
             return mb.MethodCallExpr(receiver, "run", args, namedArgs, span)
 
@@ -89,6 +93,10 @@ def expand(ast :DeepFrozen) as DeepFrozen:
             return mb.MethodCallExpr(guard, "coerce",
                                      [specimen, ex(m`throw`)], [], span)
 
+        to DefExpr(patt, ex, expr, span):
+            # XXX expand circular definitions
+            return mb.DefExpr(patt, ex, expr, span)
+
         to AugAssignExpr(op :Str, lvalue, rvalue, span):
             return mb.AssignExpr(lvalue,
                                  xp.BinaryExpr(lvalue, op, rvalue, span),
@@ -121,12 +129,18 @@ def expand(ast :DeepFrozen) as DeepFrozen:
 
         # Patterns.
 
+        to FinalPattern(expr, guard, span):
+            return mb.FinalPattern(expr(nounName), guard, span)
+
+        to BindingPattern(expr, guard, span):
+            return mb.BindingPattern(expr(nounName), guard, span)
+
         to SlotPattern(noun, guard, span):
             def slotToBinding := ex(m`_slotToBinding`)
             def trans := if (guard == null) { slotToBinding } else {
                 mb.MethodCallExpr(slotToBinding, "run", [guard], [], span)
             }
-            return mb.ViaPattern(trans, mb.BindingPattern(noun, span), span)
+            return mb.ViaPattern(trans, xp.BindingPattern(noun, span), span)
 
         to BindPattern(noun, guard, span):
             def g := if (guard == null) { ex(m`null`) } else { guard }
@@ -149,9 +163,4 @@ def expand(ast :DeepFrozen) as DeepFrozen:
             return mb.ViaPattern(mb.MethodCallExpr(ex(m`_matchSame`), verb,
                                                    [value], [], span),
                                  mb.IgnorePattern(null, span), span)
-
-        # Kernel-Monte is handled here; kernel nodes generally only need to be
-        # recursed through, not changed.
-        match [verb, args, _]:
-            M.call(monteBuilder, verb, args, [].asMap())
-    return rebuild(ast)(xp)
+    return rebuild(ast, xp)
