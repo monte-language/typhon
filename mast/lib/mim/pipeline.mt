@@ -1,6 +1,6 @@
 # import "unittest" =~ [=> unittest :Any]
 # import "tests/acceptance" =~ [=> acceptanceSuite]
-import "lib/mim/full" =~ [=> expand]
+import "lib/mim/expand" =~ [=> expand]
 import "lib/mim/anf" =~ [=> makeNormal]
 # import "lib/mim/mix" =~ [=> makeMixer]
 exports (go, pretty, evaluate)

@@ -1,5 +1,5 @@
 import "lib/mim/anf" =~ [=> makeNormal]
-import "lib/mim/full" =~ [=> expand]
+import "lib/mim/expand" =~ [=> expand]
 exports (main)
 
 def outers :Map[Str, Bytes] := [
