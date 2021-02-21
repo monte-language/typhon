@@ -1,8 +1,38 @@
+```
 import "lib/iterators" =~ [=> zip]
 exports (booleanSemiring, makeMatrixSemiring)
+```
 
-# http://stedolan.net/research/semirings.pdf
+# Semirings
 
+A [semiring](https://en.wikipedia.org/wiki/Semiring) is an algebraic structure
+upon some collection of objects. They originally generalized the natural
+numbers, and so the terminology is still number-oriented:
+* An *addition* combines two objects in an associative and commutative way
+* A *multiplication* piles two objects up in an associative way
+* Multiplication distributes over addition
+* A *zero* does nothing when used in addition
+* A *one* does nothing when used in multiplication
+
+The number-oriented intuition comes from the fact that, for any element `a` of
+the semiring:
+
+    a = a + 0 = 1 × (a + 0) = 1 × a + 1 × 0 = a + 0 = a
+
+However, aside from this, the structure of semirings can diverge greatly from
+intuition. In particular, multiplication might not commute. When it does,
+we'll say that those semirings are commutative. We may also have a *closure*
+operation, denoted with a star, which has the following axiom:
+
+    a* = 1 + a × a* = 1 + a* × a
+
+We'll say that those semirings are closed.
+
+The semirings we implement include selections from [Fun with
+Semirings](http://stedolan.net/research/semirings.pdf) and [Semiring
+Parsing](https://www.aclweb.org/anthology/J99-4004.pdf).
+
+```
 object booleanSemiring as DeepFrozen:
     "The Boolean semiring."
 
@@ -113,3 +143,4 @@ def makeMatrixSemiring(semiring :DeepFrozen, n :(Int > 0)) as DeepFrozen:
             def rv := matrixSemiring.multiply(matrixSemiring.closure(a), b)
             # And unstretch.
             return rv.slice(0, n * stride)
+```
