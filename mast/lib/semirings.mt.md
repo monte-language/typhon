@@ -1,5 +1,7 @@
 ```
 import "lib/iterators" =~ [=> zip]
+import "lib/proptests" =~ [=> arb, => prop]
+import "unittest" =~ [=> unittest :Any]
 exports (booleanSemiring, makeMatrixSemiring)
 ```
 
@@ -28,9 +30,59 @@ operation, denoted with a star, which has the following axiom:
 
 We'll say that those semirings are closed.
 
+To test whether we've implemented each semiring properly, we'll use property
+tests. There are eight axioms to check, plus one extra axiom if the semiring
+is closed.
+
+```
+def semiringProperties(sr, gen, => closed :Bool) as DeepFrozen:
+    # NB: We use .asBigAs/2 instead of .sameEver/2 because we will be testing
+    # ordered sets for equality. We could configure this with a flag if it
+    # negatively impacts test quality. ~ C.
+    def semiringAdditionCommutative(hy, a, b):
+        hy.asBigAs(sr.add(a, b), sr.add(b, a))
+    def semiringAdditionAssociative(hy, a, b, c):
+        hy.asBigAs(sr.add(a, sr.add(b, c)), sr.add(sr.add(a, b), c))
+    def semiringAdditionZero(hy, a):
+        hy.asBigAs(sr.add(a, sr.zero()), a)
+    def semiringMultiplicationAssociative(hy, a, b, c):
+        hy.asBigAs(sr.multiply(a, sr.multiply(b, c)),
+                    sr.multiply(sr.multiply(a, b), c))
+    def semiringMultiplicationZero(hy, a):
+        hy.asBigAs(sr.multiply(a, sr.zero()), sr.zero())
+        hy.asBigAs(sr.multiply(sr.zero(), a), sr.zero())
+    def semiringMultiplicationOne(hy, a):
+        hy.asBigAs(sr.multiply(a, sr.one()), a)
+        hy.asBigAs(sr.multiply(sr.one(), a), a)
+    def semiringMultiplicationDistributive(hy, a, b, c):
+        hy.asBigAs(sr.multiply(a, sr.add(b, c)),
+                    sr.add(sr.multiply(a, b), sr.multiply(a, c)))
+        hy.asBigAs(sr.multiply(sr.add(a, b), c),
+                    sr.add(sr.multiply(a, c), sr.multiply(b, c)))
+    def semiringClosure(hy, a):
+        hy.asBigAs(sr.closure(a),
+                    sr.add(sr.one(), sr.multiply(sr.closure(a), a)))
+        hy.asBigAs(sr.closure(a),
+                    sr.add(sr.one(), sr.multiply(a, sr.closure(a))))
+    return [
+        prop.test([gen(), gen()], semiringAdditionCommutative),
+        prop.test([gen(), gen(), gen()], semiringAdditionAssociative),
+        prop.test([gen()], semiringAdditionZero),
+        prop.test([gen(), gen(), gen()], semiringMultiplicationAssociative),
+        prop.test([gen()], semiringMultiplicationZero),
+        prop.test([gen()], semiringMultiplicationOne),
+        prop.test([gen(), gen(), gen()], semiringMultiplicationDistributive),
+    ] + if (closed) { [prop.test([gen()], semiringClosure)] } else { [] }
+```
+
 The semirings we implement include selections from [Fun with
-Semirings](http://stedolan.net/research/semirings.pdf) and [Semiring
-Parsing](https://www.aclweb.org/anthology/J99-4004.pdf).
+Semirings](http://stedolan.net/research/semirings.pdf) by Dolan and [Semiring
+Parsing](https://www.aclweb.org/anthology/J99-4004.pdf) by Goodman.
+
+## Booleans
+
+The smallest interesting semiring is on the Booleans. This semiring is
+commutative and closed.
 
 ```
 object booleanSemiring as DeepFrozen:
@@ -51,6 +103,27 @@ object booleanSemiring as DeepFrozen:
     to multiply(left, right):
         return left & right
 
+unittest(semiringProperties(booleanSemiring, arb.Bool, "closed" => true))
+```
+
+## Sets on Monoids
+
+Given a monoid, there is a semiring on sets of elements of the monoid:
+* The zero is the empty set
+* The one is the set with the monoid's one
+* Addition is set union
+* Multiplication is the monoidal product of the Cartesian product
+
+If the monoid is commutative, then so is the semiring.
+
+Not yet implemented: If the monoid has finite order height, then the semiring
+can be closed. The closure iteratively proceeds using the recurrence:
+
+    a* = 1 + a* × a
+
+The recurrence would start with the value `1 + a` and terminate when equal.
+
+```
 def makeSetMonoidSemiring(monoid :DeepFrozen) as DeepFrozen:
     "The semiring on sets of elements of `monoid`."
 
@@ -70,7 +143,35 @@ def makeSetMonoidSemiring(monoid :DeepFrozen) as DeepFrozen:
                 for r in (right):
                     rv.include(monoid.multiply(l, r))
             return rv.snapshot()
+```
 
+And we'll define a little numeric monoid for testing purposes. The list monoid
+would work as well, but this multiplication monoid has much more shorter test
+failure messages!
+
+```
+object testMonoid as DeepFrozen:
+    to one():
+        return 1
+
+    to multiply(l, r):
+        return l * r
+
+unittest(
+    semiringProperties(makeSetMonoidSemiring(testMonoid),
+                       fn { arb.Set(arb.Int("ceiling" => 10)) },
+                       "closed" => false))
+```
+
+## Matrices
+
+Given a semiring, the square matrices of elements also form semirings. When
+the semiring is closed, then so are the semirings of matrices.
+
+For a particular closed semiring of matrices, we can solve affine mappings of
+the form `x = Ax + B` given `A` and `B`, as if we were doing linear algebra.
+
+```
 def makeMatrixSemiring(semiring :DeepFrozen, n :(Int > 0)) as DeepFrozen:
     "The closed semiring of `n` × `n` matrices of elements of `sr`."
 

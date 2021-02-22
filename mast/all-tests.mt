@@ -19,6 +19,7 @@ import "lib/parse" =~ _
 import "lib/parsers/html" =~ _
 import "lib/proptests" =~ _
 # import "lib/prom" =~ _
+import "lib/semirings" =~ _
 import "lib/streams" =~ _
 import "lib/words" =~ _
 import "models/list/cons" =~ _
