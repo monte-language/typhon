@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 # Copyright (C) 2014 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -20,9 +22,12 @@ from typhon.autohelp import autohelp, method
 from typhon.errors import Ejecting, userError
 from typhon.errors import UserException
 from typhon.objects.collections.helpers import MonteSorter
-from typhon.objects.data import (BytesObject, IntObject, StrObject,
-                                 unwrapBytes, unwrapInt, unwrapStr, wrapBytes,
-                                 wrapInt, wrapStr)
+from typhon.objects.data import (BytesObject, CharObject, DoubleObject,
+                                 IntObject, StrObject,
+                                 unwrapBytes, unwrapChar, unwrapDouble,
+                                 unwrapInt, unwrapStr,
+                                 wrapBytes, wrapChar, wrapDouble, wrapInt,
+                                 wrapStr)
 from typhon.objects.ejectors import Ejector, throwStr
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
@@ -31,17 +36,7 @@ from typhon.profile import profileTyphon
 
 class AbstractStrategy(rstrategies.AbstractStrategy):
     __metaclass__ = rstrategies.StrategyMetaclass
-    import_from_mixin(rstrategies.SafeIndexingMixin)
-
-    # NB: RPython's version of this is wrong with an off-by-one. Ends of
-    # ranges are slice indices, so they may be exactly at the end of the list.
-    # We should perform the bounds check on the penultimate index.
-    def check_index_range(self, w_self, start, end):
-        if end < start:
-            raise IndexError
-        self.check_index(w_self, start)
-        # The fixed line.
-        self.check_index(w_self, end - 1)
+    import_from_mixin(rstrategies.UnsafeIndexingMixin)
 
     def strategy_factory(self):
         return strategyFactory
@@ -67,6 +62,36 @@ class BytesStrategy(AbstractStrategy):
 
     def wrap(self, value):
         return wrapBytes(value)
+
+@rstrategies.strategy([AnyStrategy])
+class CharStrategy(AbstractStrategy):
+    import_from_mixin(rstrategies.SingleTypeStrategy)
+
+    contained_type = CharObject
+
+    def default_value(self):
+        return CharObject(u"é")
+
+    def unwrap(self, value):
+        return unwrapChar(value)
+
+    def wrap(self, value):
+        return wrapChar(value)
+
+@rstrategies.strategy([AnyStrategy])
+class DoubleStrategy(AbstractStrategy):
+    import_from_mixin(rstrategies.SingleTypeStrategy)
+
+    contained_type = DoubleObject
+
+    def default_value(self):
+        return DoubleObject(4.2)
+
+    def unwrap(self, value):
+        return unwrapDouble(value)
+
+    def wrap(self, value):
+        return wrapDouble(value)
 
 @rstrategies.strategy([AnyStrategy])
 class SmallIntStrategy(AbstractStrategy):
@@ -368,17 +393,27 @@ class FlexList(Object):
     @method.py("List", "Int", "Int")
     def slice(self, start, stop):
         "A sublist."
-        if start < 0:
-            raise userError(u"slice/2: Negative start")
-        if stop < 0:
-            raise userError(u"slice/2: Negative stop")
+        if start > stop:
+            raise userError(u"slice/2: Start after stop: %d > %d" % (start, stop))
+        size = self.strategy.size(self)
+        if not (0 <= start <= size):
+            raise userError(
+                    u"slice/2: Start out of bounds: %d !~ start :(0..%d)" %
+                    (start, size))
+        if not (0 <= stop <= size):
+            raise userError(
+                    u"slice/2: Stop out of bounds: %d !~ stop :(0..%d)" %
+                    (stop, size))
         return self.strategy.slice(self, start, stop)
 
     @method("List", "Int", _verb="slice")
     def _slice(self, start):
-        if start < 0:
-            raise userError(u"slice/1: Negative start")
-        return self.strategy.slice(self, start, self.strategy.size(self))
+        size = self.strategy.size(self)
+        if not (0 <= start < size):
+            raise userError(
+                    u"slice/1: Start out of bounds: %d !~ start :(0..%d)" %
+                    (start, size))
+        return self.strategy.slice(self, start, size)
 
     @method.py("List")
     def snapshot(self):
