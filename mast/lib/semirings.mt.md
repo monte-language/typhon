@@ -2,7 +2,13 @@
 import "lib/iterators" =~ [=> zip]
 import "lib/proptests" =~ [=> arb, => prop]
 import "unittest" =~ [=> unittest :Any]
-exports (booleanSemiring, makeMatrixSemiring)
+exports (
+    booleanSemiring,
+    probabilitySemiring, viterbiSemiring,
+    tropicalSemiring,
+    makeSetMonoidSemiring,
+    makeMatrixSemiring,
+)
 ```
 
 # Semirings
@@ -28,42 +34,49 @@ operation, denoted with a star, which has the following axiom:
 
     a* = 1 + a × a* = 1 + a* × a
 
-We'll say that those semirings are closed.
+We'll say that those semirings are closed. Some sources, particularly
+Wikipedia, call these star semirings instead, due to the notation.
 
 To test whether we've implemented each semiring properly, we'll use property
 tests. There are eight axioms to check, plus one extra axiom if the semiring
-is closed.
+is closed. We allow each semiring to not just provide its own generator of
+elements, but also a strategy for comparing them.
 
 ```
-def semiringProperties(sr, gen, => closed :Bool) as DeepFrozen:
+def semiringProperties(sr, gen, compare, => closed :Bool) as DeepFrozen:
+    def cmp := switch (compare) {
+        match =="sameEver" { fn hy, x, y { hy.sameEver(x, y) } }
+        match =="asBigAs" { fn hy, x, y { hy.asBigAs(x, y) } }
+        match =="epsilon" { fn hy, x, y { hy.assert((x - y).abs() < 1e-7) } }
+    }
     # NB: We use .asBigAs/2 instead of .sameEver/2 because we will be testing
     # ordered sets for equality. We could configure this with a flag if it
     # negatively impacts test quality. ~ C.
     def semiringAdditionCommutative(hy, a, b):
-        hy.asBigAs(sr.add(a, b), sr.add(b, a))
+        cmp(hy, sr.add(a, b), sr.add(b, a))
     def semiringAdditionAssociative(hy, a, b, c):
-        hy.asBigAs(sr.add(a, sr.add(b, c)), sr.add(sr.add(a, b), c))
+        cmp(hy, sr.add(a, sr.add(b, c)), sr.add(sr.add(a, b), c))
     def semiringAdditionZero(hy, a):
-        hy.asBigAs(sr.add(a, sr.zero()), a)
+        cmp(hy, sr.add(a, sr.zero()), a)
     def semiringMultiplicationAssociative(hy, a, b, c):
-        hy.asBigAs(sr.multiply(a, sr.multiply(b, c)),
-                    sr.multiply(sr.multiply(a, b), c))
+        cmp(hy, sr.multiply(a, sr.multiply(b, c)),
+                sr.multiply(sr.multiply(a, b), c))
     def semiringMultiplicationZero(hy, a):
-        hy.asBigAs(sr.multiply(a, sr.zero()), sr.zero())
-        hy.asBigAs(sr.multiply(sr.zero(), a), sr.zero())
+        cmp(hy, sr.multiply(a, sr.zero()), sr.zero())
+        cmp(hy, sr.multiply(sr.zero(), a), sr.zero())
     def semiringMultiplicationOne(hy, a):
-        hy.asBigAs(sr.multiply(a, sr.one()), a)
-        hy.asBigAs(sr.multiply(sr.one(), a), a)
+        cmp(hy, sr.multiply(a, sr.one()), a)
+        cmp(hy, sr.multiply(sr.one(), a), a)
     def semiringMultiplicationDistributive(hy, a, b, c):
-        hy.asBigAs(sr.multiply(a, sr.add(b, c)),
-                    sr.add(sr.multiply(a, b), sr.multiply(a, c)))
-        hy.asBigAs(sr.multiply(sr.add(a, b), c),
-                    sr.add(sr.multiply(a, c), sr.multiply(b, c)))
+        cmp(hy, sr.multiply(a, sr.add(b, c)),
+                sr.add(sr.multiply(a, b), sr.multiply(a, c)))
+        cmp(hy, sr.multiply(sr.add(a, b), c),
+                sr.add(sr.multiply(a, c), sr.multiply(b, c)))
     def semiringClosure(hy, a):
-        hy.asBigAs(sr.closure(a),
-                    sr.add(sr.one(), sr.multiply(sr.closure(a), a)))
-        hy.asBigAs(sr.closure(a),
-                    sr.add(sr.one(), sr.multiply(a, sr.closure(a))))
+        cmp(hy, sr.closure(a),
+                sr.add(sr.one(), sr.multiply(sr.closure(a), a)))
+        cmp(hy, sr.closure(a),
+                sr.add(sr.one(), sr.multiply(a, sr.closure(a))))
     return [
         prop.test([gen(), gen()], semiringAdditionCommutative),
         prop.test([gen(), gen(), gen()], semiringAdditionAssociative),
@@ -103,7 +116,110 @@ object booleanSemiring as DeepFrozen:
     to multiply(left, right):
         return left & right
 
-unittest(semiringProperties(booleanSemiring, arb.Bool, "closed" => true))
+unittest(
+    semiringProperties(booleanSemiring, arb.Bool, "sameEver", "closed" => true)
+)
+```
+
+## Probabilities
+
+We consider several probability semirings. The first one is the standard
+probability semiring, sometimes called "inside probability" as in Goodman.
+This semiring has high dynamic range for probabilities. The closure of `x`
+gives the sum of a geometric series starting at 1 and with a ratio of
+convergence `x`, or ∞ when the series would diverge.
+
+```
+object probabilitySemiring as DeepFrozen:
+    "The semiring of probabilities represented as Doubles."
+
+    to zero():
+        return 0.0
+
+    to one():
+        return 1.0
+
+    to add(l, r):
+        return l + r
+
+    to multiply(l, r):
+        return l * r
+
+    to closure(a):
+        return if (a < 1.0) { (1.0 - a).reciprocal() } else { Infinity }
+
+def arbUnitInterval():
+    return object unitInterval:
+        to arbitrary(entropy):
+            return entropy.nextDouble()
+        to shrink(_):
+            return []
+
+unittest(
+    semiringProperties(probabilitySemiring, arbUnitInterval, "epsilon", "closed" => true)
+)
+```
+
+Another useful probability semiring is the Viterbi semiring, which corresponds
+to a different notion of likelihood. It is not closed.
+
+```
+object viterbiSemiring as DeepFrozen:
+    to zero():
+        return 0.0
+
+    to one():
+        return 1.0
+
+    to add(l, r):
+        return l.max(r)
+
+    to multiply(l, r):
+        return l * r
+
+unittest(
+    semiringProperties(viterbiSemiring, arbUnitInterval, "epsilon", "closed" => false)
+)
+```
+
+## Tropical Analysis
+
+The [tropical semiring](https://en.wikipedia.org/wiki/Tropical_semiring), also
+called the min-plus semiring because of its addition and multiplication, is a
+setting for doing a certain kind of path-counting where some paths are
+unreachable.
+
+```
+object tropicalSemiring as DeepFrozen:
+    "The tropical semiring. Specifically, the min-plus variant."
+
+    to zero():
+        return null
+
+    to one():
+        return 0
+
+    to add(l, r):
+        return if (l == null) { r } else if (r == null) { l } else {
+            l.min(r)
+        }
+
+    to multiply(l, r):
+        # NB: One-armed if-expr abuse. ~ C.
+        return if (l != null && r != null) { l + r }
+
+    to closure(_):
+        return 0
+
+def arbMaybeNat():
+    return object nat extends arb.NullOk(arb.Int("ceiling" => 10)):
+        to arbitrary(entropy):
+            def x := super.arbitrary(entropy)
+            return if (x != null) { x.abs() }
+
+unittest(
+    semiringProperties(tropicalSemiring, arbMaybeNat, "sameEver", "closed" => true)
+)
 ```
 
 ## Sets on Monoids
@@ -119,7 +235,7 @@ If the monoid is commutative, then so is the semiring.
 Not yet implemented: If the monoid has finite order height, then the semiring
 can be closed. The closure iteratively proceeds using the recurrence:
 
-    a* = 1 + a* × a
+    a* = 1 + a × a*
 
 The recurrence would start with the value `1 + a` and terminate when equal.
 
@@ -146,7 +262,7 @@ def makeSetMonoidSemiring(monoid :DeepFrozen) as DeepFrozen:
 ```
 
 And we'll define a little numeric monoid for testing purposes. The list monoid
-would work as well, but this multiplication monoid has much more shorter test
+would work as well, but this multiplication monoid has much shorter test
 failure messages!
 
 ```
@@ -160,6 +276,7 @@ object testMonoid as DeepFrozen:
 unittest(
     semiringProperties(makeSetMonoidSemiring(testMonoid),
                        fn { arb.Set(arb.Int("ceiling" => 10)) },
+                       "asBigAs",
                        "closed" => false))
 ```
 
