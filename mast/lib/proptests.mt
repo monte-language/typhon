@@ -116,8 +116,8 @@ object arb as DeepFrozen:
 
             to shrink(l :List) :List[List]:
                 def singles := [for x in (l) [x]]
-                def heads := [for i => _ in (l) [l.slice(0, i)]]
-                def tails := [for i => _ in (l) [l.slice(i, l.size())]]
+                def heads := [for i => _ in (l) l.slice(0, i)]
+                def tails := [for i => _ in (l) l.slice(i, l.size())]
                 return singles + heads + tails
 
     to Map(keyArb, valueArb, => maxSize :Int := 100):
