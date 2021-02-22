@@ -6,6 +6,7 @@ exports (
     booleanSemiring,
     probabilitySemiring, viterbiSemiring,
     tropicalSemiring,
+    makePolynomialSemiring,
     makeSetMonoidSemiring,
     makeMatrixSemiring,
 )
@@ -219,6 +220,70 @@ def arbMaybeNat():
 
 unittest(
     semiringProperties(tropicalSemiring, arbMaybeNat, "sameEver", "closed" => true)
+)
+```
+
+## Polynomials
+
+Every semiring has a free polynomial semiring, or [polynomial
+rig](https://en.wikipedia.org/wiki/Polynomial_ring#Polynomial_rigs), which
+treats elements of the semiring as coefficients in formal polynomial
+expressions.
+
+Note that if we were to treat our polynomials as formal power series, then we
+would be able to build a closure operation. However, this is a non-trivial
+tradeoff, since formal power series do not have decideable equality and are
+hard to treat as plain data.
+
+```
+def makePolynomialSemiring(sr :DeepFrozen) as DeepFrozen:
+    return object polynomialSemiring as DeepFrozen:
+        "A semiring of polynomials on a semiring."
+
+        to zero():
+            return []
+
+        to one():
+            return [sr.one()]
+
+        to add(l, r):
+            return [for [x, y] in (zip.ragged(l, r, "padding" => sr.zero())) {
+                sr.add(x, y)
+            }]
+
+        to multiply(l, r):
+            return if (l.isEmpty() || r.isEmpty()) { [] } else {
+                [for k in (0..!(l.size() + r.size() - 1)) {
+                    var x := sr.zero()
+                    for li => lx in (l) {
+                        def ri := k - li
+                        if (ri >= r.size()) { continue }
+                        if (ri.belowZero()) { break }
+                        x := sr.add(x, sr.multiply(lx, r[ri]))
+                    }
+                    x
+                }]
+            }
+```
+
+We can test polynomials in both the Boolean semiring, which is small enough to
+give us very good coverage for small numbers of coefficients, and also in the
+tropical semiring, which ensures that our coefficient-juggling logic is
+correct.
+
+```
+unittest(
+    semiringProperties(makePolynomialSemiring(booleanSemiring),
+                       fn { arb.List(arb.Bool()) },
+                       "sameEver",
+                       "closed" => false)
+)
+
+unittest(
+    semiringProperties(makePolynomialSemiring(tropicalSemiring),
+                       fn { arb.List(arbMaybeNat()) },
+                       "sameEver",
+                       "closed" => false)
 )
 ```
 
