@@ -89,6 +89,8 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                     if (sl == el && sc == ec):
                         return `$sl.$sc: $errMsg`
                     return `$sl.$sc-$el.$ec: $errMsg`
+                else:
+                    return `1.0-1.0: (unknown location) $error`
 
             to formatPretty():
                 if (error =~ [errMsg, span]):
