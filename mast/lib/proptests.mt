@@ -57,13 +57,18 @@ object arb as DeepFrozen:
                 return []
 
     to Double():
-        def edges := [NaN, Infinity, -Infinity]._makeIterator()
+        def edges := [NaN, Infinity, -Infinity, 0.0, -0.0, 1.0, -1.0]._makeIterator()
         return object arbInt as Arb:
             to arbitrary(entropy) :Double:
                 return escape ej:
                     edges.next(ej)[1]
                 catch _:
-                    entropy.nextDouble()
+                    var d := entropy.nextDouble()
+                    if (entropy.nextBool()):
+                        d := d.reciprocal()
+                    if (entropy.nextBool()):
+                        d := -d
+                    d
 
             to shrink(d :Double) :List[Double]:
                 return []
@@ -90,6 +95,16 @@ object arb as DeepFrozen:
 
             to shrink(l :List[Char]) :List[Str]:
                 return [for cs in (super.shrink(l)) _makeStr.fromChars(cs)]
+
+    to NullOk(subArb):
+        var nextNull := true
+        return object arbNullOk as Arb:
+            to arbitrary(entropy):
+                nextNull := !nextNull
+                return if (nextNull) { subArb.arbitrary(entropy) }
+
+            to shrink(val):
+                return if (val == null) { [] } else { subArb.shrink(val) }
 
     to List(subArb, => maxSize :Int := 100):
         return object arbList as Arb:
@@ -210,10 +225,12 @@ def prop.test(arbs, f, => iterations :Int := 2 ** 6) as DeepFrozen:
 
                 M.call(f, "run", [hypothesis] + args, [].asMap())
             if (!failures.isEmpty()):
-                def messages := [for [args, blurb] in (failures.slice(0, 5)) {
+                def failureSize := failures.size()
+                def failuresToShow := failures.slice(0, failureSize.min(5))
+                def messages := [for [args, blurb] in (failuresToShow) {
                     `Case $args failure: $blurb`
                 }]
-                assert.fail(`Property $f failed on ${failures.size()} cases: ${"\n".join(messages)}`)
+                assert.fail(`Property $f failed on $failureSize cases: ${"\n".join(messages)}`)
 
 def testPropNoRepeatedBools(assert):
     var timesCalled :Int := 0
