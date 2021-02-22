@@ -116,8 +116,7 @@ object arb as DeepFrozen:
                 }
 
             to shrink(m :Map) :List[Map]:
-                def singles := [for k => v in (m) [k => v]]
-                return singles
+                return [for k => v in (m) [k => v]]
 
     to Set(subArb):
         return object arbSet as Arb:
@@ -130,8 +129,7 @@ object arb as DeepFrozen:
                 }
 
             to shrink(s :Set) :List[Set]:
-                def singles := [for x in (s) [x].asSet()]
-                return singles
+                return [for x in (s) [x].asSet()]
 
     to Ast(subArb):
         return object arbAst as Arb:
@@ -212,10 +210,10 @@ def prop.test(arbs, f, => iterations :Int := 2 ** 6) as DeepFrozen:
 
                 M.call(f, "run", [hypothesis] + args, [].asMap())
             if (!failures.isEmpty()):
-                def messages := [for [args, blurb] in (failures) {
+                def messages := [for [args, blurb] in (failures.slice(0, 5)) {
                     `Case $args failure: $blurb`
                 }]
-                assert.fail(`Property $f failed on cases: ${"\n".join(messages)}`)
+                assert.fail(`Property $f failed on ${failures.size()} cases: ${"\n".join(messages)}`)
 
 def testPropNoRepeatedBools(assert):
     var timesCalled :Int := 0
