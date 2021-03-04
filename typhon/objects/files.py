@@ -25,6 +25,7 @@ from typhon.errors import userError
 from typhon.futures import FutureCtx, resolve, Ok, Break, Continue, LOOP_BREAK, LOOP_CONTINUE, OK, smash
 from typhon.macros import macros, io
 from typhon.objects.constants import NullObject
+from typhon.objects.collections.lists import ConstList
 from typhon.objects.data import BytesObject, StrObject, unwrapStr
 from typhon.objects.refs import makePromise
 from typhon.objects.root import Object, runnable
@@ -356,8 +357,10 @@ class FileStatistics(Object):
 @autohelp
 class FileResource(Object):
     """
-    A Resource which provides access to the file system of the current
-    process.
+    A resource which provides access to the file system.
+
+    This resource operates at a distance and cannot tell whether it references
+    a file or a directory, nor whether its referent exists.
     """
 
     # For help understanding this class, consult FilePath, the POSIX
@@ -378,9 +381,27 @@ class FileResource(Object):
     def sibling(self, segment):
         return FileResource(self.segments[:-1] + [segment])
 
+    def child(self, segment):
+        return FileResource(self.segments + [segment])
+
     def temporarySibling(self, suffix):
         fileName = rsodium.randomHex() + suffix
         return self.sibling(fileName)
+
+    @method("Any")
+    def getListing(self):
+        "List the potential children of this directory."
+        p, r = makePromise()
+        vat = currentVat.get()
+        path = self.asBytes()
+        try:
+            names = os.listdir(path)
+            wrapped = ConstList([StrObject(bs.decode("utf-8")) for bs in names])
+            r.resolve(wrapped)
+        except OSError as ose:
+            r.smash(StrObject(u"Couldn't list children for %s: %s" %
+                    (path.decode("utf-8"), ose.strerror.decode("utf-8"))))
+        return p
 
     @method("Any")
     def getContents(self):
@@ -473,6 +494,12 @@ class FileResource(Object):
         if u'/' in name:
             raise userError(u"sibling/1: Illegal file name '%s'" % name)
         return self.sibling(name.encode("utf-8"))
+
+    @method("Any", "Str", _verb="child")
+    def _child(self, name):
+        if u'/' in name:
+            raise userError(u"child/1: Illegal file name '%s'" % name)
+        return self.child(name.encode("utf-8"))
 
     @method("Any", _verb="temporarySibling")
     def _temporarySibling(self):
