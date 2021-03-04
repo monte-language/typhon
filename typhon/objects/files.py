@@ -392,7 +392,6 @@ class FileResource(Object):
     def getListing(self):
         "List the potential children of this directory."
         p, r = makePromise()
-        vat = currentVat.get()
         path = self.asBytes()
         try:
             names = os.listdir(path)
@@ -400,6 +399,19 @@ class FileResource(Object):
             r.resolve(wrapped)
         except OSError as ose:
             r.smash(StrObject(u"Couldn't list children for %s: %s" %
+                    (path.decode("utf-8"), ose.strerror.decode("utf-8"))))
+        return p
+
+    @method("Any")
+    def makeDirectory(self):
+        "Create this directory."
+        p, r = makePromise()
+        path = self.asBytes()
+        try:
+            os.mkdir(path)
+            r.resolve(NullObject)
+        except OSError as ose:
+            r.smash(StrObject(u"Couldn't create directory %s: %s" %
                     (path.decode("utf-8"), ose.strerror.decode("utf-8"))))
         return p
 
