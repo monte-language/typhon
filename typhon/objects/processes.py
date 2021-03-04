@@ -11,7 +11,7 @@ from typhon.errors import userError
 from typhon.futures import IOEvent
 from typhon.log import log
 from typhon.objects.collections.maps import monteMap
-from typhon.objects.data import BytesObject, StrObject, unwrapBytes
+from typhon.objects.data import BytesObject, unwrapBytes
 from typhon.objects.networking.streamcaps import (StreamSink, StreamSource,
                                                   emptySource, nullSink)
 from typhon.objects.root import Object, audited
@@ -107,24 +107,25 @@ class ProcessExitInformation(Object):
         return self._terminationSignal
 
 
+EMPTY_PID = -1
+
+
 @autohelp
 class SubProcess(Object):
     """
     A subordinate process of the current process, on the local node.
     """
-    EMPTY_PID = -1
-    EMPTY_EXIT_AND_SIGNAL = (-1, -1)
 
     def __init__(self, vat, process, executable, argv, env, stdin, stdout,
                  stderr):
-        self.pid = self.EMPTY_PID
+        self.pid = EMPTY_PID
         self.process = process
         self.executable = executable
         self.argv = argv
         self.env = env
-        self.exit_and_signal = self.EMPTY_EXIT_AND_SIGNAL
-        self.resolvers = []
         self.vat = vat
+
+        self.waitPromise, self.waitResolver = makePromise()
 
         self.stdin = stdin
         self.stdout = stdout
@@ -133,24 +134,15 @@ class SubProcess(Object):
         ruv.stashProcess(process, (self.vat, self))
 
     def retrievePID(self):
-        if self.pid == self.EMPTY_PID:
-            self.pid = intmask(self.process.c_pid)
+        self.pid = intmask(self.process.c_pid)
 
     def exited(self, exit_status, term_signal):
-        if self.pid == self.EMPTY_PID:
-            self.retrievePID()
-        self.exit_and_signal = (intmask(exit_status), intmask(term_signal))
-        toResolve, self.resolvers = self.resolvers, []
-
+        exitInfo = ProcessExitInformation(exit_status, term_signal)
         with scopedVat(self.vat):
-            for resolver in toResolve:
-                self.resolveWaiter(resolver)
-
-    def resolveWaiter(self, resolver):
-        resolver.resolve(ProcessExitInformation(*self.exit_and_signal))
+            self.waitResolver.resolve(exitInfo)
 
     def toString(self):
-        if self.pid == self.EMPTY_PID:
+        if self.pid == EMPTY_PID:
             return u"<child process (unspawned)>"
         return u"<child process (PID %d)>" % self.pid
 
@@ -182,12 +174,7 @@ class SubProcess(Object):
 
     @method("Any")
     def wait(self):
-        p, r = makePromise()
-        if self.exit_and_signal != self.EMPTY_EXIT_AND_SIGNAL:
-            self.resolveWaiter(r)
-        else:
-            self.resolvers.append(r)
-        return p
+        return self.waitPromise
 
     @method("Any")
     def stdin(self):
