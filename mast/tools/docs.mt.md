@@ -1,5 +1,6 @@
 ```
 import "lib/codec/utf8" =~ [=> UTF8]
+import "lib/http/tag" =~ [=> tag]
 import "lib/streams" =~ [=> collectBytes]
 import "lib/which" =~ [=> makePathSearcher, => makeWhich]
 exports (main)
@@ -76,6 +77,19 @@ def configurePandoc(pandoc, via (UTF8.encode) inputBase :Bytes,
         return process<-wait()
 ```
 
+## Generating an Index
+
+We could use Pandoc to generate the index HTML, but we'll hand-generate it for
+now.
+
+```
+def prepareIndex(pages :List) :Str as DeepFrozen:
+    def links := tag.ul([for [base, target] in (pages) {
+        tag.li(tag.a(base, "href" => target))
+    }])
+    return "<!DOCTYPE html>" + links.asStr()
+```
+
 ## Entrypoint
 
 The actual output format could be configured to anything which Pandoc
@@ -102,6 +116,7 @@ def main(argv, => currentProcess, => makeFileResource, => makeProcess) as DeepFr
         traceln(`Got Pandoc: $pandoc`)
         def doc := configurePandoc(pandoc, inputDir, outputDir, outputFormat)
 
+        def pages := [].diverge()
         object walk:
             to directory(path :Str):
                 def dir := makeFileResource(`$outputDir/$path`)
@@ -109,8 +124,12 @@ def main(argv, => currentProcess, => makeFileResource, => makeProcess) as DeepFr
 
             to file(path :Str):
                 return if (path =~ `@base.mt.md`):
-                    doc(path, `$base.html`)
+                    def target := `$base.html`
+                    pages.push([base, target])
+                    doc(path, target)
 
         when (walkAt(makeFileResource(inputDir), walk)) ->
-            0
+            def via (UTF8.encode) index := prepareIndex(pages.snapshot())
+            when (makeFileResource(outputDir).child("index.html").setContents(index)) ->
+                0
 ```
