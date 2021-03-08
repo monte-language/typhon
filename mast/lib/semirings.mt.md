@@ -14,9 +14,11 @@ exports (
 
 # Semirings
 
-A [semiring](https://en.wikipedia.org/wiki/Semiring) is an algebraic structure
-upon some collection of objects. They originally generalized the natural
-numbers, and so the terminology is still number-oriented:
+A [semiring](https://en.wikipedia.org/wiki/Semiring), sometimes called a rig,
+is an algebraic structure upon some collection of objects. They originally
+generalized the natural numbers, and so the terminology is still
+number-oriented:
+
 * An *addition* combines two objects in an associative and commutative way
 * A *multiplication* piles two objects up in an associative way
 * Multiplication distributes over addition
@@ -185,10 +187,20 @@ unittest(
 
 ## Tropical Analysis
 
-The [tropical semiring](https://en.wikipedia.org/wiki/Tropical_semiring), also
-called the min-plus semiring because of its addition and multiplication, is a
-setting for doing a certain kind of path-counting where some paths are
-unreachable.
+The [tropical semiring](https://en.wikipedia.org/wiki/Tropical_semiring) is
+the setting for tropical analysis. Or, as some might put it, tropical analysis
+proceeds from considering the tropical semiring.
+
+This semiring is also called the min-plus semiring because its addition and
+multiplication are minimum and addition respectively. In [Objects of
+Categories as Complex Numbers](https://arxiv.org/abs/math/0212377), this
+semiring is called the rig of degrees, because its elements can represent
+the classes of polynomials of certain degrees.
+
+In addition to the mentioned uses, the tropical semiring is a setting for
+counting paths on graphs between selected vertices; one indicates the path
+from a vertex to itself, zero indicates unreachability, addition indicates
+multiple paths, and multiplication composes paths.
 
 ```
 object tropicalSemiring as DeepFrozen:
@@ -290,6 +302,7 @@ unittest(
 ## Sets on Monoids
 
 Given a monoid, there is a semiring on sets of elements of the monoid:
+
 * The zero is the empty set
 * The one is the set with the monoid's one
 * Addition is set union
