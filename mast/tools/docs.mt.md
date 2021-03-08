@@ -49,6 +49,22 @@ def ensureDirExists(fileResource) as DeepFrozen:
         fileResource<-makeDirectory()
 ```
 
+## Extracting Metadata from Markdown
+
+For literate Monte files, we can guess their title by looking for a top-level
+header.
+
+```
+def extractMarkdownTitle(file :Bytes) :NullOk[Bytes] as DeepFrozen:
+    var inMarkup :Bool := true
+    for line in (file.split(b`$\n`)):
+        if (line == b````````):
+            inMarkup := !inMarkup
+        else if (inMarkup && line =~ b`# @title`):
+            return title
+    return null
+```
+
 ## Calling Pandoc
 
 In general, Pandoc wants to be incanted like this:
@@ -60,15 +76,18 @@ def configurePandoc(pandoc, via (UTF8.encode) inputBase :Bytes,
                     via (UTF8.encode) outputBase :Bytes,
                     outputFormat :Bytes) as DeepFrozen:
     return def runPandoc(via (UTF8.encode) fromPath :Bytes,
-                         via (UTF8.encode) toPath :Bytes):
+                         via (UTF8.encode) toPath :Bytes,
+                         title :NullOk[Bytes]):
+        def t := if (title == null) { b`Monte Documentation` } else { title }
         def args := [
             b`--from`, b`markdown`,
             b`--to`, outputFormat,
             b`--standalone`,
             b`--output`, b`$outputBase/$toPath`,
-            b`--metadata`, b`title=Monte Docs`,
+            b`--metadata`, b`title=$t`,
             b`$inputBase/$fromPath`,
         ]
+
         def process := pandoc<-(args, [].asMap(), "stderr" => true)
         def stderr := collectBytes(process<-stderr())
         when (stderr) ->
@@ -84,8 +103,13 @@ now.
 
 ```
 def prepareIndex(pages :List) :Str as DeepFrozen:
-    def links := tag.ul([for [base, target] in (pages) {
-        tag.li(tag.a(base, "href" => target))
+    def links := tag.ul([for [base, target, title] in (pages) {
+        if (title == null) {
+            tag.li(tag.a(tag.code(base), "href" => target))
+        } else {
+            def via (UTF8.decode) t := title
+            tag.li(tag.a(tag.code(base), `: $t`, "href" => target))
+        }
     }])
     return "<!DOCTYPE html>" + links.asStr()
 ```
@@ -125,8 +149,12 @@ def main(argv, => currentProcess, => makeFileResource, => makeProcess) as DeepFr
             to file(path :Str):
                 return if (path =~ `@base.mt.md`):
                     def target := `$base.html`
-                    pages.push([base, target])
-                    doc(path, target)
+
+                    def file := makeFileResource(`$inputDir/$path`)
+                    when (def bs := file<-getContents()) ->
+                        def title := extractMarkdownTitle(bs)
+                        doc(path, target, title)
+                        pages.push([base, target, title])
 
         when (walkAt(makeFileResource(inputDir), walk)) ->
             def via (UTF8.encode) index := prepareIndex(pages.snapshot())
