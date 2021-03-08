@@ -66,9 +66,9 @@ def configurePandoc(pandoc, via (UTF8.encode) inputBase :Bytes,
             b`--to`, outputFormat,
             b`--standalone`,
             b`--output`, b`$outputBase/$toPath`,
+            b`--metadata`, b`title=Monte Docs`,
             b`$inputBase/$fromPath`,
         ]
-        traceln(`pandoc($args)`)
         def process := pandoc<-(args, [].asMap(), "stderr" => true)
         def stderr := collectBytes(process<-stderr())
         when (stderr) ->
