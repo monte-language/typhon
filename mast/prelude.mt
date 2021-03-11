@@ -195,7 +195,7 @@ object Set as DeepFrozenStamp:
                 def set := [].asSet().diverge()
                 for element in (specimen):
                     set.include(subGuard.coerce(element, ej))
-                return set
+                return set.snapshot()
 
                 throw.eject(ej,
                             ["(Probably) not a conforming set:", specimen])
