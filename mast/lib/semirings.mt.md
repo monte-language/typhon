@@ -8,6 +8,7 @@ exports (
     probabilitySemiring, viterbiSemiring,
     tropicalSemiring,
     makePolynomialSemiring,
+    makeSetSemiring,
     makeSetMonoidSemiring,
     makeMatrixSemiring,
     makeTransferSemiring,
@@ -325,7 +326,59 @@ unittest(
 )
 ```
 
-## Sets on Monoids
+## Within a Set
+
+Given a set, there is a semiring on its subsets:
+
+* The zero is the empty set
+* The one is the original set
+* Addition is set union
+* Multiplication is set intersection
+* The closure of every subset is the original set
+
+In a way, the Boolean semiring is the
+[decategorified](https://en.wikipedia.org/wiki/Categorification) version of
+these semirings.
+
+```
+def makeSetSemiring(s :Set[DeepFrozen]) as DeepFrozen:
+    return object setSemiring:
+        to zero():
+            return [].asSet()
+
+        to one():
+            return s
+
+        to add(left, right):
+            return left | right
+
+        to multiply(left, right):
+            return left & right
+
+        to closure(_):
+            return s
+```
+
+To test, we'll designate a test set of elements, and pick arbitrary subsets.
+
+```
+def testSet := _makeList.fromIterable(0..!10).asSet()
+
+def arbSubset():
+    return object subset:
+        to arbitrary(entropy):
+            return [for x in (testSet) ? (entropy.nextBool()) x].asSet()
+
+        to shrink(s):
+            return [for x in (s) s.without(x)]
+
+unittest(
+    semiringProperties(makeSetSemiring(testSet), arbSubset, "asBigAs",
+                       "closed" => true)
+)
+```
+
+## Sets of Monoids
 
 Given a monoid, there is a semiring on sets of elements of the monoid:
 
