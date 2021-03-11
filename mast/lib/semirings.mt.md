@@ -3,6 +3,7 @@ import "lib/iterators" =~ [=> zip]
 import "lib/proptests" =~ [=> arb, => prop]
 import "unittest" =~ [=> unittest :Any]
 exports (
+    affineFixpoint,
     booleanSemiring,
     probabilitySemiring, viterbiSemiring,
     tropicalSemiring,
@@ -32,13 +33,41 @@ the semiring:
 
 However, aside from this, the structure of semirings can diverge greatly from
 intuition. In particular, multiplication might not commute. When it does,
-we'll say that those semirings are commutative. We may also have a *closure*
-operation, denoted with a star, which has the following axiom:
+we'll say that those semirings are commutative.
+
+The semirings we implement include selections from [Fun with
+Semirings](http://stedolan.net/research/semirings.pdf) by Dolan and [Semiring
+Parsing](https://www.aclweb.org/anthology/J99-4004.pdf) by Goodman.
+
+## Closed Semirings
+
+We may also have a *closure* operation, denoted with a star, which has the
+following axiom:
 
     a* = 1 + a × a* = 1 + a* × a
 
 We'll say that those semirings are closed. Some sources, particularly
 Wikipedia, call these star semirings instead, due to the notation.
+
+For any closed semiring, consider the affine maps; these are functions:
+
+    x = a × x + b
+
+Each affine map can be characterized by the pair `(a, b)` of elements of the
+semiring. Further, `a* × b` is a fixpoint of each map (Dolan).
+
+```
+def affineFixpoint(sr :DeepFrozen, a, b) as DeepFrozen:
+    "
+    A fixpoint of the affine map `x = a × x + b` in the closed semiring `sr`.
+
+    The fixpoint may not be unique.
+    "
+
+    return sr.multiply(sr.closure(a), b)
+```
+
+## Testing
 
 To test whether we've implemented each semiring properly, we'll use property
 tests. There are eight axioms to check, plus one extra axiom if the semiring
@@ -90,10 +119,6 @@ def semiringProperties(sr, gen, compare, => closed :Bool) as DeepFrozen:
         prop.test([gen(), gen(), gen()], semiringMultiplicationDistributive),
     ] + if (closed) { [prop.test([gen()], semiringClosure)] } else { [] }
 ```
-
-The semirings we implement include selections from [Fun with
-Semirings](http://stedolan.net/research/semirings.pdf) by Dolan and [Semiring
-Parsing](https://www.aclweb.org/anthology/J99-4004.pdf) by Goodman.
 
 ## Booleans
 
@@ -393,10 +418,10 @@ def makeMatrixSemiring(semiring :DeepFrozen, n :(Int > 0)) as DeepFrozen:
             return [semiring.zero()] * n ** 2
 
         to one() :List:
-            def diagonals := [for i in (0..!n) i ** 2]
-            return [for i in (0..!n ** 2) if (diagonals.contains(i)) {
-                semiring.one()
-            } else { semiring.zero() }]
+            def rv := matrixSemiring.zero().diverge()
+            for i in (0..!n):
+                rv[i * (n + 1)] := semiring.one()
+            return rv.snapshot()
 
         to closure(x :List) :List:
             # Lehmann's algorithm.
@@ -439,4 +464,34 @@ def makeMatrixSemiring(semiring :DeepFrozen, n :(Int > 0)) as DeepFrozen:
             def rv := matrixSemiring.multiply(matrixSemiring.closure(a), b)
             # And unstretch.
             return rv.slice(0, n * stride)
+```
+
+To test matrices, we'll use the Boolean semiring in order to test the closure
+algorithm, and also the tropical semiring to test correctness of
+multiplication. The sizes are chosen so that we exhaustively cover the 2x2
+Boolean matrices, and also explore non-trivial 3x3 tropical matrices.
+
+```
+def arbMatrix(size :Int, gen):
+    return def makeArbMatrix():
+        def gens := [for _ in (0..!(size ** 2)) gen()]
+        return object matrix:
+            to arbitrary(entropy):
+                return [for gen in (gens) gen.arbitrary(entropy)]
+            to shrink(_):
+                return []
+
+unittest(
+    semiringProperties(makeMatrixSemiring(booleanSemiring, 2),
+                       arbMatrix(2, arb.Bool),
+                       "sameEver",
+                       "closed" => true)
+)
+
+unittest(
+    semiringProperties(makeMatrixSemiring(tropicalSemiring, 3),
+                       arbMatrix(3, arbMaybeNat),
+                       "sameEver",
+                       "closed" => true)
+)
 ```
