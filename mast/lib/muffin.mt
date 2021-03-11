@@ -3,7 +3,7 @@ import "lib/codec/utf8" =~ [=> UTF8]
 import "lib/freezer" =~ [=> freeze]
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
 import "lib/monte/monte_parser" =~ [=> parseModule]
-exports (makeFileLoader, loadTopLevelMuffin)
+exports (loadAnySource, makeFileLoader, loadTopLevelMuffin)
 
 # Turn files into code objects. This kit includes a muffin maker, as well as a
 # reasonable example loader which is used by our top-level compiler and REPL.
@@ -73,6 +73,22 @@ def loaders :Map[Str, DeepFrozen] := [
     # Always try MAST after Monte source code! Protect users from stale MAST.
     "mast" => loadMAST,
 ]
+
+def loadAnySource(file :Bytes, filename :Str, ej) as DeepFrozen:
+    "
+    Load any source file. The filename is both used to detect which loaders to
+    try, and also to determine the petname used to decorate spans.
+
+    Currently supported, in order:
+    * .asdl: Zephyr ASDL
+    * .mt.md: Literate Monte source
+    * .mt: Monte source
+    * .mast: Binary Monte AST
+    "
+
+    for extension => loader in (loaders):
+        if (filename =~ `@petname.$extension`):
+            return loader(file, petname, ej)
 
 def makeFileLoader(rootedLoader) as DeepFrozen:
     "
