@@ -10,6 +10,7 @@ exports (
     makePolynomialSemiring,
     makeSetMonoidSemiring,
     makeMatrixSemiring,
+    makeTransferSemiring,
 )
 ```
 
@@ -495,3 +496,46 @@ unittest(
                        "closed" => true)
 )
 ```
+
+## Transfer Functions
+
+Given some [commutative
+monoid](https://en.wikipedia.org/wiki/Monoid#Commutative_monoid), its
+[endofunctions](https://en.wikipedia.org/wiki/Endomorphism#Endofunctions) form
+a closed semiring. Note that the closure might not be computable; we can give
+an algorithm, but it might diverge. Dolan calls these [transfer
+functions](https://en.wikipedia.org/wiki/Transfer_function), since they are
+models of transformations from inputs to outputs, and closure creates feedback
+from outputs to inputs.
+
+```
+def makeTransferSemiring(monoid :DeepFrozen) as DeepFrozen:
+    "The closed semiring of transfer functions on `monoid`."
+
+    return object transferSemiring as DeepFrozen:
+        to zero():
+            return fn _ { monoid.one() }
+
+        to one():
+            return fn m { m }
+
+        to add(left, right):
+            return fn m { monoid.multiply(left(m), right(m)) }
+
+        to multiply(left, right):
+            return fn m { right(left(m)) }
+
+        to closure(f):
+            return fn m {
+                var next := m
+                var rv := monoid.multiply(m, f(m))
+                while (next != rv) {
+                    next := rv
+                    rv := monoid.multiply(rv, f(rv))
+                }
+                rv
+            }
+```
+
+We cannot compare functions for equality easily, so we cannot test this
+semiring like the others.
