@@ -11,6 +11,7 @@ import "lib/enum" =~ _
 import "lib/http/tag" =~ _
 import "lib/iterators" =~ _
 import "lib/json" =~ _
+import "lib/luby" =~ _
 import "lib/matrices" =~ _
 import "lib/mim/pipeline" =~ _
 import "lib/monte/monte_verifier" =~ _
