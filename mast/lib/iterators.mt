@@ -1,5 +1,5 @@
 import "unittest" =~ [=> unittest :Any]
-exports (async, zip)
+exports (async, zip, islice)
 
 # A prelude-safe library of tools for working with iterators.
 
@@ -164,4 +164,44 @@ def testAsyncWhile(assert):
 unittest([
     testAsyncFor,
     testAsyncWhile,
+])
+
+def islice(iterable, start, stop) as DeepFrozen:
+    "
+    An iterable which slices into `iterable` starting at the `start` key and
+    ending before the `stop` key.
+
+    The behavior is meant to line up with standard slicing arithmetic, but is
+    generalized for any sort of keyed iterator.
+
+    The sliced keys will be preserved; the wrapped iterators will not be
+    rekeyed or reindexed.
+    "
+
+    return def isliceIterable._makeIterator():
+        def iterator := iterable._makeIterator()
+        var started :Bool := false
+        var stopped :Bool := false
+        return def isliceIterator.next(ej):
+            if (stopped):
+                throw.eject(ej, "End of slice")
+            else if (started):
+                def rv := def [k, _] := iterator.next(ej)
+                if (k == stop):
+                    stopped := true
+                    throw.eject(ej, "End of slice")
+                return rv
+            else:
+                while (true):
+                    def rv := def [k, _] := iterator.next(ej)
+                    if (k == start):
+                        started := true
+                        return rv
+
+def testISliceList(assert):
+    def l := [0, 1, 2, 3, 4, 5]
+    assert.equal(_makeList.fromIterable(islice(l, 1, 4)), [1, 2, 3])
+
+unittest([
+    testISliceList,
 ])
