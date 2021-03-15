@@ -400,10 +400,18 @@ def _makePumpPair(pump) :Pair[Sink, Source] as DeepFrozen:
 
         to complete() :Void:
             switch (ps):
+                # Go idempotently from quiet to finished. We're not changing
+                # stored state, just altering how the state machine will
+                # reply to future messages.
                 match ==QUIET:
                     ps := FINISHED
+                match ==FINISHED:
+                    null
+                # Similarly, go idempotently from packets to closing.
                 match ==PACKETS:
                     ps := CLOSING
+                match ==CLOSING:
+                    null
                 match ==SINKS:
                     ps := FINISHED
                     for [sink, r] in (state):
