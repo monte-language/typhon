@@ -19,7 +19,7 @@ def chr(i :Int) :Char as DeepFrozen:
     return '\x00' + i
 
 
-def decodeCore(var bs :Bytes, _ej) as DeepFrozen:
+def decodeCore(bs :Bytes) as DeepFrozen:
     var offset :Int := 0
     def buf := [].diverge()
     while (true):
@@ -69,9 +69,9 @@ def decodeCore(var bs :Bytes, _ej) as DeepFrozen:
     return [_makeStr.fromChars(buf), bs.slice(offset)]
 
 def testDecodeCoreThreeBytes(assert):
-    assert.equal(decodeCore(b`$\xe2`, null), ["", b`$\xe2`])
-    assert.equal(decodeCore(b`$\xe2$\x8c`, null), ["", b`$\xe2$\x8c`])
-    assert.equal(decodeCore(b`$\xe2$\x8c$\xb5`, null), ["⌵", b``])
+    assert.equal(decodeCore(b`$\xe2`), ["", b`$\xe2`])
+    assert.equal(decodeCore(b`$\xe2$\x8c`), ["", b`$\xe2$\x8c`])
+    assert.equal(decodeCore(b`$\xe2$\x8c$\xb5`), ["⌵", b``])
 
 unittest([testDecodeCoreThreeBytes])
 
@@ -102,14 +102,13 @@ def encodeCore(c :Char) :List[Int] as DeepFrozen:
 
 object UTF8 as DeepFrozen:
     to decode(specimen, ej) :Str:
-        def [s, remainder] exit ej := decodeCore(Bytes.coerce(specimen, ej), ej)
+        def [s, remainder] exit ej := decodeCore(Bytes.coerce(specimen, ej))
         if (!remainder.isEmpty()):
             throw.eject(ej, [remainder, "was not empty"])
         return s
 
     to decodeExtras(specimen, ej):
-        def bs :Bytes exit ej := specimen
-        return decodeCore(bs, ej)
+        return decodeCore(Bytes.coerce(specimen, ej))
 
     to encode(specimen, ej) :Bytes:
         def is := [].diverge()
