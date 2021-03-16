@@ -3,6 +3,7 @@
 # import "fun/marley" =~ _
 import "lib/amp" =~ _
 import "lib/argv" =~ _
+import "lib/codec/base64" =~ _
 import "lib/codec/percent" =~ _
 import "lib/codec/utf8" =~ _
 import "lib/doubles" =~ _
