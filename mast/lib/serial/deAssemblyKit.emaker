@@ -1,0 +1,196 @@
+#!/usr/bin/env rune
+
+# Copyright 2002 Combex, Inc. under the terms of the MIT X license
+# found at http://www.opensource.org/licenses/mit-license.html ................
+
+def makeTextWriter := <elib:oldeio.TextWriter>
+def Iteratable := <type:org.erights.e.elib.tables.Iteratable>
+def makeTermParser := <import:org.quasiliteral.term.TermParser>
+def StringBuffer := <type:java.lang.StringBuffer>
+
+def DEBuilderOf := <elib:serial.DEBuilderOf>
+def DEStringBuilder := DEBuilderOf(void, String)
+def DEStreamBuilder := DEBuilderOf(void, void)
+
+/**
+ * DataECode assembly code is the readable form of the DataECode instruction
+ * set.
+ * <p>
+ * A kit is a set of utilities for manipulating things of a particular kind.
+ * The deAssemblyKit will provide for recognition (assembly) of this
+ * assembly code, and does provide for building (disassembly) for producing
+ * assembly listings.
+ *
+ * @see <a hrep=
+ *       "http://www.erights.org/data/serial/jhu-paper/modeling.html#as-eval"
+ * >Unserialization as Expression Evaluation</a>.
+ * @author Mark S. Miller
+ */
+def deAssemblyKit {
+
+    /**
+     * Makes a builder whose output (the result of buildRoot()) is a string
+     * in DataECode assembly code.
+     * <p>
+     * This is conventionally known as "disassembly".
+     * Note that each line is written in term-tree syntax, and encodes one
+     * instruction.
+     */
+    to makeBuilder() :DEStringBuilder {
+
+        def [out :TextWriter, sb :StringBuffer] :=
+          makeTextWriter.makeBufferingPair()
+
+        def subBuilder := deAssemblyKit.makeStreamBuilder(out)
+
+        def wrappingBuilder extends subBuilder implements DEStringBuilder {
+
+            to getRootType() :near { String }
+
+            to buildRoot(root) :String {
+                super.buildRoot(root)
+                out.close()
+                sb.snapshot()
+            }
+        }
+    }
+
+    /**
+     * Makes a builder writing the same assembly code, but writing into the
+     * provided stream rather than returning a result.
+     */
+    to makeStreamBuilder(out :TextWriter) :DEStreamBuilder {
+
+        # The index of the next temp variable
+        var nextTemp := 0
+
+        def deAssemblyBuilder implements DEStreamBuilder {
+
+            to getNodeType() :near { void }
+            to getRootType() :near { void }
+
+            to buildRoot(_) {
+                out.println(`OP_ROOT`)
+                out.flush()
+            }
+
+            to buildLiteral(value) {
+                switch (value) {
+                    match i :int {
+                        if (i >= 0) {
+                            out.println(`OP_LIT_WHOLENUM($i)`)
+                        } else {
+                            out.println(`OP_LIT_NEGINT(${-i})`)
+                        }
+                    }
+                    match f :float64 {
+                        out.println(`OP_LIT_FLOAT64($f)`)
+                    }
+                    match c :char {
+                        out.println(`OP_LIT_CHAR(${E.toQuote(c)})`)
+                    }
+                    match str :String {
+                        out.println(`OP_LIT_STRING(${E.toQuote(str)})`)
+                    }
+                }
+            }
+
+            to buildImport(varName :String) {
+                out.println(`OP_IMPORT(${E.toQuote(varName)})`)
+            }
+
+            to buildIbid(tempIndex :int) {
+                out.println(`OP_IBID($tempIndex)`)
+            }
+
+            to buildCall(_, verb :String, args :void[]) {
+                out.println(`OP_CALL(${E.toQuote(verb)}, ${args.size()})`)
+            }
+
+            to buildDefine(_) :[void, int] {
+                def tempIndex := nextTemp
+                nextTemp += 1
+                out.println(`OP_DEFINE # t_$tempIndex`)
+                [null, tempIndex]
+            }
+
+            to buildPromise() :int {
+                def promIndex := nextTemp
+                def resIndex := promIndex + 1
+                nextTemp += 2
+                out.println(`OP_PROMISE # [t_$promIndex, t_$resIndex]`)
+                promIndex
+            }
+
+            to buildDefrec(resIndex :int, _) {
+                out.println(`OP_DEFREC($resIndex)`)
+            }
+        }
+    }
+
+    /**
+     * Parse an assembly listing, and invoke a DEBuilder to convert to some
+     * other representation.
+     */
+    to recognize(listing :String, builder) :(builder.getRootType()) {
+        deAssemblyKit.recognizeStream(listing.split("\n"), builder)
+    }
+
+    /**
+     *
+     */
+    to recognizeStream(inp :Iteratable, builder) :(builder.getRootType()) {
+
+        def stack := [].diverge()
+
+        for line in inp {
+            switch (makeTermParser(line)) {
+                match term`OP_ROOT` {
+                    return builder.buildRoot(stack.pop())
+                }
+                match term`OP_LIT_WHOLENUM(.int.@i)` {
+                    stack.push(builder.buildLiteral(i.getOptData()))
+                }
+                match term`OP_LIT_NEGINT(.int.@i)` {
+                    stack.push(builder.buildLiteral(-(i.getOptData())))
+                }
+                match term`OP_LIT_FLOAT64(.float64.@f)` {
+                    stack.push(builder.buildLiteral(f.getOutData()))
+                }
+                match term`OP_LIT_CHAR(.char.@c)` {
+                    stack.push(builder.buildLiteral(c.getOptData()))
+                }
+                match term`OP_LIT_STRING(.String.@str)` {
+                    stack.push(builder.buildLiteral(str.getOptString()))
+                }
+                match term`OP_IMPORT(.String.@varName)` {
+                    stack.push(builder.buildImport(varName.getOptString()))
+                }
+                match term`OP_IBID(.int.@tempIndex)` {
+                    stack push(builder.buildIbid(tempIndex.getOptData()))
+                }
+                match term`OP_CALL(.String.@verb, .int.@arity)` {
+                    def stackSize := stack.size()
+                    def firstArgIndex := stackSize - arity.getOptData()
+                    def args := stack.removeRun(firstArgIndex, stackSize)
+                    def rec := stack.pop()
+                    stack.push(builder.buildCall(rec,
+                                                 verb.getOptString(),
+                                                 args))
+                }
+                match term`OP_DEFINE` {
+                    # buildDefine normally hands back its argument, in which
+                    # case this code does not effect the stack.
+                    stack.push(builder.buildDefine(stack.pop())[0])
+                }
+                match term`OP_PROMISE` {
+                    builder.buildPromise()
+                }
+                match term`OP_DEFREC(.int.@resIndex)` {
+                    stack.push(builder.buildDefrec(resIndex.getOptData(),
+                                                   stack.pop()))
+                }
+            }
+        }
+    }
+}
