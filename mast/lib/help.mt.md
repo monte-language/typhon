@@ -163,18 +163,21 @@ object help as DeepFrozen:
 
     to run(specimen, => showMiranda :Bool := false) :Str:
         def [preamble, methods] := extractMethods(specimen, => showMiranda)
-        def lines := [preamble].diverge()
 
-        if (methods.isEmpty()):
-            lines.push("No methods declared.")
-        else:
-            def ribbon := makeRibbon()
-            ribbon.push("Methods declared:")
-            for meth in (methods):
-                ribbon.push(`${meth.getVerb()}/${meth.getArity()}`)
-            lines.push(ribbon.snapshot())
+        def body := switch (methods) {
+            match [] { "No methods declared." }
+            match [m] { "Single-method object:\n" + documentMethod(m) }
+            match _ {
+                def ribbon := makeRibbon()
+                ribbon.push("Methods declared:")
+                for m in (methods) {
+                    ribbon.push(`${m.getVerb()}/${m.getArity()}`)
+                }
+                ribbon.snapshot()
+            }
+        }
 
-        return "\n".join(lines)
+        return preamble + "\n" + body
 
     to run(specimen, verb :Str, => showMiranda :Bool := false) :Str:
         "
@@ -185,7 +188,6 @@ object help as DeepFrozen:
         "
 
         def [preamble, methods] := extractMethods(specimen, => showMiranda)
-        def lines := [preamble].diverge()
 
         def candidates := filterVerb(methods, verb)
 
@@ -201,7 +203,6 @@ object help as DeepFrozen:
         "
 
         def [preamble, methods] := extractMethods(specimen, => showMiranda)
-        def lines := [preamble].diverge()
 
         def candidates := filterAtom(methods, verb, arity)
 
