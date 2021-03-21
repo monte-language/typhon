@@ -41,7 +41,6 @@ from typhon.objects.guards import anyGuard
 from typhon.objects.refs import resolution
 from typhon.objects.root import tieMirandaKnot
 from typhon.objects.slots import finalBinding
-from typhon.objects.timeit import benchmarkSettings
 from typhon.prelude import registerGlobals
 from typhon.profile import registerProfileTyphon
 from typhon.scopes.boot import bootScope
@@ -246,9 +245,6 @@ def runTyphon(argv):
     if config.loadOnly:
         # We are finished.
         return 0
-
-    if not config.benchmark:
-        benchmarkSettings.disable()
 
     with profiling("vmprof.log", config.profile):
         # Update loop timing information.

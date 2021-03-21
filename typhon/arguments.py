@@ -50,9 +50,6 @@ class Configuration(object):
     # Whether to collect precise profiling statistics.
     profile = False
 
-    # Whether to run benchmarks.
-    benchmark = False
-
     # Whether to print metrics.
     metrics = False
 
@@ -93,8 +90,6 @@ class Configuration(object):
                 self.loadOnly = True
             elif item == "-p":
                 self.profile = True
-            elif item == "-b":
-                self.benchmark = True
             elif item == "-m":
                 self.metrics = True
             elif item == "--jit":

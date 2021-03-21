@@ -27,7 +27,6 @@ from typhon.objects.processes import makeCurrentProcess, makeProcess
 from typhon.objects.root import Object, audited
 from typhon.objects.runtime import CurrentRuntime
 from typhon.objects.slots import finalize
-from typhon.objects.timeit import bench
 from typhon.objects.timers import Timer
 
 
@@ -52,7 +51,6 @@ def unsafeScope(argv, config):
     from typhon.objects.collections.lists import wrapList
     return finalize({
         u"Timer": Timer(),
-        u"bench": bench(),
         u"currentProcess": makeCurrentProcess(argv),
         u"currentRuntime": CurrentRuntime(config),
         u"_findTyphonFile": FindTyphonFile(config.libraryPaths),
