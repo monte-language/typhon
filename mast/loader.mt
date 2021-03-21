@@ -121,7 +121,7 @@ def loaderMain(args :List[Str]) :Vow[Int]:
             def exps := makeModuleAndConfiguration(modname)
             when (exps) ->
                 def [module, _] := exps
-                def excludes := ["typhonEval", "_findTyphonFile", "bench"]
+                def excludes := ["typhonEval", "_findTyphonFile"]
                 # Leave out loader-only objects.
                 def unsafeScopeValues := [for `&&@n` => &&v in (unsafeScope)
                                           ? (!excludes.contains(n))
@@ -161,18 +161,6 @@ def loaderMain(args :List[Str]) :Vow[Int]:
                 def [[=> makeRunner] | _, _] := testRunner
                 def runner := makeRunner(stdio, unsealException, Timer)
                 runner<-runTests(collectedTests)
-        match [=="bench"] + modnames:
-            def someMods := promiseAllFulfilled(
-                [for modname in (modnames)
-                 makeModuleAndConfiguration(modname,
-                                            "collectBenchmarks" => true)] +
-                [(def benchRunner := makeModuleAndConfiguration("benchRunner"))])
-            return when (someMods) ->
-                def [[=> runBenchmarks] | _, _] := benchRunner
-                when (runBenchmarks(collectedBenches, bench,
-                                    makeFileResource("bench.html"))) ->
-                    traceln(`Benchmark report written to bench.html.`)
-                    0
 
         match _:
             throw(usage)
