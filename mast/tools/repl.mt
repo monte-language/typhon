@@ -6,6 +6,7 @@ import "lib/help" =~ [=> help]
 import "lib/iterators" =~ [=> async]
 import "lib/json" =~ [=> JSON]
 import "lib/muffin" =~ [=> makeFileLoader, => loadTopLevelMuffin]
+import "lib/timeit" =~ [=> timeit]
 import "lib/which" =~ [=> makePathSearcher, => makeWhich]
 exports (main)
 
@@ -120,17 +121,8 @@ def main(_argv,
 
         to benchmark(callable) :Vow[Double]:
             "Run `callable` repeatedly, recording the time taken."
-            def iterations :Int := 10_000
-            var total := 0.0
-            def ps := [for i in (0..!iterations) {
-                def t := Timer<-measureTimeTaken(callable)
-                when (t) -> {
-                    total += t[1]
-                    log(M.toString(total / i) + "=" * (72 * i // iterations))
-                }
-            }]
-            return when (promiseAllFulfilled(ps)) ->
-                total / iterations
+
+            return timeit(callable, Timer<-measureTimeTaken)
 
         to draw(drawable) :Vow[Void]:
             "Draw `drawable` to the screen."
