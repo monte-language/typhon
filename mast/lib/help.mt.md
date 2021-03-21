@@ -38,21 +38,44 @@ def isMiranda(meth) :Bool as DeepFrozen:
 There are some object protocols which are well-known. Some of them are built
 into Monte's semantics:
 
+* Auditors
+* Comparisons and comparables
+* Controllers
 * Guards
+* Iterables and iterators
 * Miranda
 
 And some of them are common throughout the standard library:
 
 * Codecs
+* Random variables
 
 ```
 def defaultMessages :Map[DeepFrozen, DeepFrozen] := [
+    # Audition protocol.
+    ["audit", 1] => "Audit a specimen.",
+
+    # Comparison protocol.
+    ["op__cmp", 1] => "Compare this object to another object.",
+
+    # Comparable protocol.
+    ["aboveZero", 0] => "Whether this object is strictly positive.",
+    ["atLeastZero", 0] => "Whether this object is zero or positive.",
+    ["atMostZero", 0] => "Whether this object is zero or negative.",
+    ["belowZero", 0] => "Whether this object is strictly negative.",
+    ["isZero", 0] => "Whether this object is zero.",
+
+    # Controller protocol.
+    ["control", 4] => "Build a custom control-flow expression from this object.",
+
     # Guard protocol.
     ["coerce", 2] => "Coerce a specimen with this object, ejecting on failure.",
 
-    # Codec protocol.
-    ["decode", 2] => "Decode a value with this codec, ejecting on failure.",
-    ["encode", 2] => "Encode a value with this codec, ejecting on failure.",
+    # Iterable protocol.
+    ["_makeIterator", 0] => "Make a fresh iterator from this object.",
+
+    # Iterator protocol.
+    ["next", 1] => "Iterate over a collection or eject on failure.",
 
     # Miranda.
     ["_conformTo", 1] => "Conform this object to an interface.",
@@ -61,6 +84,13 @@ def defaultMessages :Map[DeepFrozen, DeepFrozen] := [
     ["_sealedDispatch", 1] => "Perform generic sealed dispatch.",
     ["_uncall", 0] => "Uncall this object into its components.",
     ["_whenMoreResolved", 1] => "This object has become more resolved.",
+
+    # Codec protocol.
+    ["decode", 2] => "Decode a value with this codec, ejecting on failure.",
+    ["encode", 2] => "Encode a value with this codec, ejecting on failure.",
+
+    # Random variables protocol.
+    ["arbitrary", 1] => "Sample this random variable using a source of entropy.",
 ]
 ```
 
