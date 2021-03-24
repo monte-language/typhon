@@ -18,7 +18,7 @@ import math
 import string
 
 from rpython.rlib import rgc
-from rpython.rlib.rbigint import BASE10, rbigint
+from rpython.rlib.rbigint import BASE10, MASK, rbigint
 from rpython.rlib.jit import elidable
 from rpython.rlib.objectmodel import _hash_float, specialize
 from rpython.rlib.rarithmetic import LONG_BIT, intmask, ovfcheck
@@ -986,6 +986,29 @@ def promoteToDouble(o):
         return n.bi.tofloat()
     raise WrongType(u"Failed to promote to double")
 
+# For popcount, we need to generate a series of masks based on a maximum size,
+# which will be the first power of two greater than MASK. We then unroll them
+# to implement the fast algorithm sketched at WP:
+# https://en.wikipedia.org/wiki/Hamming_weight#Efficient_implementation
+HAMMING_WIDTH = 1
+while 2 ** HAMMING_WIDTH < MASK:
+    HAMMING_WIDTH += 1
+HAMMING_WIDTH = HAMMING_WIDTH.bit_length()
+def hammingMask(i, width):
+    m = 2 ** i
+    r = 2 ** (width - i - 1)
+    return int(('0' * m + '1' * m) * r, 2)
+HAMMING_MASKS = [hammingMask(i, HAMMING_WIDTH) for i in range(HAMMING_WIDTH)]
+def hammingWord(w):
+    i = 1
+    rv = w
+    for mask in HAMMING_MASKS:
+        x = (rv >> i) & mask
+        rv &= mask
+        rv += x
+        i *= 2
+    return rv
+
 # Numeric multimethods behave in a really *really* specific way: If you want
 # to match both BigInts and Ints, then the BigInt methods must be listed
 # first. Don't say that I didn't document it. ~ C.
@@ -1278,6 +1301,11 @@ class IntObject(Object):
             i >>= 1
         return rv
 
+    @method("Int")
+    @elidable
+    def bitSum(self):
+        return hammingWord(self._i)
+
     def intPow(self, exponent):
         accumulator = 1
         multiplier = self._i
@@ -1454,6 +1482,19 @@ class BigInt(Object):
         """
 
         return self.bi.bit_length()
+
+    @method("Int")
+    def bitSum(self):
+        """
+        The number of bits set in this object.
+
+        Also known as population count or Hamming weight.
+        """
+
+        rv = 0
+        for d in self.bi._digits:
+            rv += hammingWord(d)
+        return rv
 
     @method("BigInt")
     def complement(self):
