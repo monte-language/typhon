@@ -1,5 +1,5 @@
 import "fun/natset" =~ [=> Nat, => makeNatSet]
-exports (makeSimplicialComplex)
+exports (makeSimplicialComplex, collapsingFiltration)
 
 # http://people.maths.ox.ac.uk/nanda/cat/TDANotes.pdf
 
@@ -54,6 +54,9 @@ object makeSimplicialComplex as DeepFrozen:
                     out.print(", ")
                     out.quote(simplices.size())
                     out.print(" simplices>")
+
+            to _makeIterator():
+                return simplices._makeIterator()
 
             to dimension() :Nat:
                 "The maximum dimension of all simplices in this complex."
@@ -123,3 +126,44 @@ object makeSimplicialComplex as DeepFrozen:
                 return makeSimplicialComplex.fromSimplices([for s in (simplices) ? ({
                     makeNatSet.fromIterable([for x in (s) f[x]]) <= t
                 }) s].asSet())
+
+            to freeFaces() :Set:
+                "
+                The faces in this complex whose open stars contain exactly
+                themselves and one other simplex.
+                "
+
+                return [for s in (simplices) ? ({
+                    simplicialComplex.star(s).size() == 2
+                }) s].asSet()
+
+            to elementaryCollapse(face):
+                "
+                The subcomplex which is missing `face`.
+
+                The face must already be in this complex and be the smaller of
+                a free face pair.
+                "
+
+                def [s] := simplicialComplex.star(face).without(face).asList()
+                return makeSimplicialComplex.fromSimplices(simplices.without(face).without(s))
+
+
+def collapsingFiltration(complex) as DeepFrozen:
+    "
+    Iteratively collapse `complex` to successively smaller subcomplices.
+
+    Each iteration yields a single elementary collapse, or end of iteration if
+    no free face pairs remain.
+    "
+
+    return def collapseIterable._makeIterator():
+        var i := 0
+        var subcomplex := complex
+        return def collapseIterator.next(ej):
+            # Find a free face pair.
+            def [face] + _ exit ej := subcomplex.freeFaces().asList()
+            subcomplex elementaryCollapse= (face)
+            def rv := [i, subcomplex]
+            i += 1
+            return rv
