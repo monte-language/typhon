@@ -41,7 +41,8 @@ object makeSimplicialComplex as DeepFrozen:
 
     to run(simplices :Set ? (!simplices.isEmpty() && !simplices.contains(makeNatSet(0)))):
         "
-        Assemble a simplicial complex from `simplices`.
+        Assemble a simplicial complex from `simplices`. At least one simplex
+        must be provided, and no simplex may be empty.
 
         Closure is not enforced, so the resulting complex may be invalid. To
         ensure that this is not the case, use
@@ -56,7 +57,7 @@ object makeSimplicialComplex as DeepFrozen:
             to _printOn(out):
                 if (simplices.isEmpty()):
                     out.print("<empty simplicial complex>")
-                else if (simplices.size() <= 5):
+                else if (simplices.size() <= 5 * 2):
                     out.print("<simplicial complex ")
                     out.quote(simplices.asList().sort().reverse())
                     out.print(">")
@@ -109,10 +110,20 @@ object makeSimplicialComplex as DeepFrozen:
             to cone():
                 "The cone of this complex."
 
-                def v := simplicialComplex.dimension() + 1
-                def vs := makeNatSet.singleton(v)
-                def ss := [for s in (simplices) s.with(v)].asSet()
-                return makeSimplicialComplex(simplices | ss.with(vs))
+                # For a fresh vertex, we'll take the union of everything in
+                # the complex, and then find the first vertex not in that
+                # union.
+                var union := makeNatSet(0)
+                for s in (simplices):
+                    union |= s
+                for v in (0..union.asBits().bitLength()):
+                    if (union.contains(v)):
+                        continue
+                    # v is not currently used, so we'll use it for a vertex.
+                    def vs := makeNatSet.singleton(v)
+                    def ss := [for s in (simplices) s.with(v)].asSet()
+                    return makeSimplicialComplex(simplices | ss.with(vs))
+                throw(".cone/0: Unreachable code")
 
             to closure(subcomplex :Set):
                 "
