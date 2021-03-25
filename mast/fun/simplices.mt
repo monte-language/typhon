@@ -21,7 +21,7 @@ object makeSimplicialComplex as DeepFrozen:
     to fromSolid(n :Nat):
         "The solid `n`-dimensional simplicial complex."
 
-        return makeSimplicialComplex.fromSimplices([for i in (1..!(2 ** n)) {
+        return makeSimplicialComplex([for i in (1..!(2 ** (n + 1))) {
             makeNatSet(i)
         }].asSet())
 
@@ -30,14 +30,26 @@ object makeSimplicialComplex as DeepFrozen:
         The hollow `n`-dimensional simplicial complex.
 
         Like the solid `n`-dimensional simplicial complex, but without the
-        highest-dimensional simplex, creating an `n`-dimensional hole.
+        highest-dimensional simplex, creating an `n`-dimensional hole. Note
+        that there is no hollow 0-dimensional simplicial complex, because we
+        do not represent (the single unique) (-1)-dimensional simplex.
         "
 
-        return makeSimplicialComplex.fromSimplices([for i in (1..!(2 ** n) - 1) {
+        return makeSimplicialComplex([for i in (1..!(2 ** (n + 1)) - 1) {
             makeNatSet(i)
         }].asSet())
 
-    to fromSimplices(simplices :Set):
+    to run(simplices :Set ? (!simplices.isEmpty() && !simplices.contains(makeNatSet(0)))):
+        "
+        Assemble a simplicial complex from `simplices`.
+
+        Closure is not enforced, so the resulting complex may be invalid. To
+        ensure that this is not the case, use
+        `makeSimplicialComplex.fromSolid/1` to prepare a complex which is
+        large enough to hold the closure as a subcomplex, and then call
+        `.closure/1`.
+        "
+
         return object simplicialComplex:
             "A discrete combinatorial space."
 
@@ -46,7 +58,7 @@ object makeSimplicialComplex as DeepFrozen:
                     out.print("<empty simplicial complex>")
                 else if (simplices.size() <= 5):
                     out.print("<simplicial complex ")
-                    out.quote(simplices.asList().sort())
+                    out.quote(simplices.asList().sort().reverse())
                     out.print(">")
                 else:
                     out.print("<simplicial complex, dimension ")
@@ -61,15 +73,15 @@ object makeSimplicialComplex as DeepFrozen:
             to dimension() :Nat:
                 "The maximum dimension of all simplices in this complex."
 
-                var rv := 0
+                var rv := 1
                 for s in (simplices):
                     rv max= (s.size())
-                return rv
+                return rv - 1
 
             to applyMap(m :SimplicialMap):
                 "Apply simplicial map `m` to this complex."
 
-                return makeSimplicialComplex.fromSimplices([for s in (simplices) {
+                return makeSimplicialComplex([for s in (simplices) {
                     makeNatSet.fromIterable([for x in (s) m[x]])
                 }].asSet())
 
@@ -90,7 +102,7 @@ object makeSimplicialComplex as DeepFrozen:
             to link(simplex):
                 "The link of `simplex` in this complex."
 
-                return makeSimplicialComplex.fromSimplices([for s in (simplices) ? ({
+                return makeSimplicialComplex([for s in (simplices) ? ({
                     simplices.contains(s | simplex) && (s & simplex).isEmpty()
                 }) s].asSet())
 
@@ -100,7 +112,7 @@ object makeSimplicialComplex as DeepFrozen:
                 def v := simplicialComplex.dimension() + 1
                 def vs := makeNatSet.singleton(v)
                 def ss := [for s in (simplices) s.with(v)].asSet()
-                return makeSimplicialComplex.fromSimplices(simplices | ss.with(vs))
+                return makeSimplicialComplex(simplices | ss.with(vs))
 
             to closure(subcomplex :Set):
                 "
@@ -118,12 +130,12 @@ object makeSimplicialComplex as DeepFrozen:
                         if (!rv.contains(face)):
                             rv.include(face)
                             queue.push(face)
-                return makeSimplicialComplex.fromSimplices(rv.snapshot())
+                return makeSimplicialComplex(rv.snapshot())
 
             to fiberAt(f :SimplicialMap, t):
                 "The fiber of `f` over `t` in this complex."
 
-                return makeSimplicialComplex.fromSimplices([for s in (simplices) ? ({
+                return makeSimplicialComplex([for s in (simplices) ? ({
                     makeNatSet.fromIterable([for x in (s) f[x]]) <= t
                 }) s].asSet())
 
@@ -146,7 +158,17 @@ object makeSimplicialComplex as DeepFrozen:
                 "
 
                 def [s] := simplicialComplex.star(face).without(face).asList()
-                return makeSimplicialComplex.fromSimplices(simplices.without(face).without(s))
+                return makeSimplicialComplex(simplices.without(face).without(s))
+
+            to eulerCharacteristic() :Int:
+                "The Euler characteristic of this simplicial complex."
+
+                var rv :Int := 0
+                for s in (simplices):
+                    # NB: This isn't backwards; dimension has opposite parity
+                    # from size, so when size is even, dimension is odd, etc.
+                    rv += (s.size() & 1).isZero().pick(-1, 1)
+                return rv
 
 
 def collapsingFiltration(complex) as DeepFrozen:
