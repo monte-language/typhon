@@ -1,4 +1,4 @@
-exports (makeNatSet)
+exports (Nat, makeNatSet)
 
 def Nat :DeepFrozen := Int >= 0
 
