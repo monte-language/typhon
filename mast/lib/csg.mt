@@ -39,9 +39,8 @@ solid = Sphere(double radius, material)
 displacement = Sines(double lx, double ly, double lz)
              | Noise(double lx, double ly, double lz, int octaves)
              | Dimples(double lx, double ly, double lz)
-material = Lambert(color flat, color ambient)
-         | Phong(color specular, color diffuse, color ambient,
-                 double shininess)
+material = Lambert(color flat)
+         | Phong(color specular, color diffuse, double shininess)
 color = Color(double red, double green, double blue)
       | Normal
       | Depth
@@ -425,37 +424,31 @@ def asSDF(noise) as DeepFrozen:
                 (one * scaled) ** exponents
             }
 
-        to Lambert(flat, ambient):
+        to Lambert(flat):
             # https://en.wikipedia.org/wiki/Lambertian_reflectance
-            return object lambertShader {
-                to ambient(p, N, Z, fwidth) { return ambient(p, N, Z, fwidth) }
-                to run(_eye, light, p, N, Z, fwidth) {
-                    def L := glsl.normalize(light - p)
-                    def diff := glsl.dot(L, N)
-                    return if (diff.belowZero()) { zero } else {
-                        flat(p, N, Z, fwidth) * diff
-                    }
+            return def lambertShader(_eye, light, p, N, Z, fwidth) {
+                def L := glsl.normalize(light - p)
+                def diff := glsl.dot(L, N)
+                return if (diff.belowZero()) { zero } else {
+                    flat(p, N, Z, fwidth) * diff
                 }
             }
 
-        to Phong(specular, diffuse, ambient, shininess):
+        to Phong(specular, diffuse, shininess):
             # https://en.wikipedia.org/wiki/Phong_reflection_model
-            return object phongShader {
-                to ambient(p, N, Z, fwidth) { return ambient(p, N, Z, fwidth) }
-                to run(eye, light, p, N, Z, fwidth) {
-                    def L := glsl.normalize(light - p)
-                    def diff := glsl.dot(L, N)
+            return def phongShader(eye, light, p, N, Z, fwidth) {
+                def L := glsl.normalize(light - p)
+                def diff := glsl.dot(L, N)
 
-                    return if (diff.belowZero()) { zero } else {
-                        def ks := specular(p, N, Z, fwidth)
-                        def kd := diffuse(p, N, Z, fwidth)
-                        def R := glsl.normalize(glsl.reflect(-L, N))
-                        def base := glsl.dot(R, glsl.normalize(eye - p))
-                        def spec := if (base.belowZero()) { 0.0 } else {
-                            ks * base ** shininess
-                        }
-                        kd * diff + ks * spec
+                return if (diff.belowZero()) { zero } else {
+                    def ks := specular(p, N, Z, fwidth)
+                    def kd := diffuse(p, N, Z, fwidth)
+                    def R := glsl.normalize(glsl.reflect(-L, N))
+                    def base := glsl.dot(R, glsl.normalize(eye - p))
+                    def spec := if (base.belowZero()) { 0.0 } else {
+                        ks * base ** shininess
                     }
+                    kd * diff + ks * spec
                 }
             }
 
@@ -662,11 +655,11 @@ object costOfSolid as DeepFrozen:
     to Marble(_, _, _):
         return 2
 
-    to Lambert(flat, ambient):
-        return flat + ambient + 1
+    to Lambert(flat):
+        return flat + 1
 
-    to Phong(specular, diffuse, ambient, _):
-        return specular + diffuse + ambient + 1
+    to Phong(specular, diffuse, _):
+        return specular + diffuse + 1
 
     to Sphere(_, material):
         return material + 2
