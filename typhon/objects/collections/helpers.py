@@ -28,14 +28,14 @@ from typhon.objects.constants import unwrapBool
 # change at any time.
 
 def resolveKey(key):
-    from typhon.objects.refs import Promise, isResolved
-    if isinstance(key, Promise):
-        key = key.resolution()
-        # Do the resolution check again.
-        if not isResolved(key):
-            raise userError(u"Unresolved promises cannot be used as map keys")
+    "Resolve a key so that its value won't change, or throw an exception."
 
-    # If the original key wasn't a promise, then no checks are needed.
+    from typhon.objects.refs import isResolved, resolution
+    key = resolution(key)
+
+    if not isResolved(key):
+        raise userError(u"Unresolved promises cannot be used as map keys")
+
     return key
 
 def keyEq(first, second):

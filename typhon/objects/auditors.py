@@ -189,13 +189,15 @@ def checkDeepFrozen(specimen, seen, ej, root):
     from typhon.objects.collections.maps import ConstMap
     from typhon.objects.ejectors import throwStr
     from typhon.objects.equality import TraversalKey
-    from typhon.objects.refs import Promise, isBroken
+    from typhon.objects.refs import Promise, isBroken, resolution
+
+    specimen = resolution(specimen)
+
     key = TraversalKey(specimen)
     if key in seen:
         return
     seen[key] = None
-    if isinstance(specimen, Promise):
-        specimen = specimen.resolution()
+
     if specimen.auditedBy(deepFrozenStamp):
         return
     elif isBroken(specimen):
@@ -241,7 +243,7 @@ def deepFrozenSupersetOf(guard):
     from typhon.objects.collections.lists import unwrapList
     from typhon.objects.constants import wrapBool
     from typhon.objects.ejectors import Ejector
-    from typhon.objects.refs import Promise
+    from typhon.objects.refs import Promise, resolution
     from typhon.objects.guards import (
         AnyOfGuard, BoolGuard, BytesGuard, CharGuard, DoubleGuard,
         FinalSlotGuard, IntGuard, SameGuard, StrGuard, SubrangeGuard,
@@ -251,8 +253,9 @@ def deepFrozenSupersetOf(guard):
         return True
     if guard is deepFrozenStamp:
         return True
-    if isinstance(guard, Promise):
-        guard = guard.resolution()
+
+    guard = resolution(guard)
+
     if isinstance(guard, BoolGuard):
         return True
     if isinstance(guard, BytesGuard):
