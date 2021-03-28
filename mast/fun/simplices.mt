@@ -9,6 +9,16 @@ exports (makeSimplicialComplex, collapsingFiltration)
 # Map, but a List.
 def SimplicialMap :DeepFrozen := List[Nat]
 
+# Our unordered sets of natural numbers have a natural orientation under the
+# typical ordering. This gives us a natural iteration over the faces under a
+# given simplex.
+def orientedFaces(simplex) as DeepFrozen:
+    return def faceIterable._makeIterator():
+        var iter := simplex._makeIterator()
+        return def faceIterator.next(ej):
+            def [k, v] := iter.next(ej)
+            return [k, simplex.without(v)]
+
 object makeSimplicialComplex as DeepFrozen:
     "
     Create simplicial complices indexed by natural numbers.
