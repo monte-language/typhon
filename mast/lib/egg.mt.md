@@ -60,7 +60,8 @@ def compile(W :Map, V :Map, o :Int) as DeepFrozen:
         ["yield"] + [for i in (V) i]
     } else {
         # Put subpatterns at the end.
-        def i := makeSchwartzian(subpatternsLast).sortValues(W).getKeys()[0]
+        def schwartzian := makeSchwartzian.fromComparison(subpatternsLast)
+        def i := schwartzian.sortValues(W).getKeys()[0]
         switch (W[i]) {
             match [==leaf, t] { ["check", i, t, compile(W.without(i), V, o)] }
             match [f] + p {
@@ -198,17 +199,22 @@ invariant maintenance will be turned into an iterative series of batches.
             # Worklist is broken into two pieces:
             # * mergelist: next batch of pairs to merge
             # * classlist: next batch of e-classes to rebuild
-            def mergelist := pairs.diverge()
+            def mergelist := pairs.asSet().diverge()
             while (!mergelist.isEmpty()):
                 # merge()
                 traceln("merge()", mergelist)
                 def classlist := [].asSet().diverge()
                 for [a, b] in (mergelist):
-                    if (U.find(a) != U.find(b)):
-                        classlist.include(a)
-                        classlist.include(b)
-                        U.union(a, b)
-                        eM[a] := eM[b] := eM[a] | eM[b]
+                    def ra := U.find(a)
+                    def rb := U.find(b)
+                    if (ra != rb):
+                        classlist.include(ra)
+                        U.union(ra, rb)
+                        eM[ra] := eM[rb] := eM[ra] | eM[rb]
+                        parents[ra] := parents[rb] := (
+                            parents.fetch(ra, fn { [].asMap() }) |
+                            parents.fetch(rb, fn { [].asMap() })
+                        )
 
                 # Reset the mergelist.
                 mergelist.clear()
@@ -216,11 +222,11 @@ invariant maintenance will be turned into an iterative series of batches.
                 # rebuild()
                 traceln("rebuild()", classlist)
                 while (!classlist.isEmpty()):
-                    for eclass in (classlist):
-                        # def eclass := U.find(todo)
+                    for todo in (classlist):
+                        def eclass := U.find(todo)
                         # repair()
                         traceln("repair()", eclass)
-                        def oldParents := parents.fetch(eclass, fn { [] })
+                        def oldParents := parents.fetch(eclass, fn { [].asMap() })
                         def newParents := [].asMap().diverge()
                         for parent => pclass in (oldParents):
                             def pnode := canonicalize(parent)
@@ -228,7 +234,8 @@ invariant maintenance will be turned into an iterative series of batches.
                             if (newParents.contains(pnode)):
                                 mergelist.push([pclass, newParents[pnode]])
 
-                            H.removeKey(parent)
+                            if (H.contains(parent)):
+                                H.removeKey(parent)
                             H[pnode] := newParents[pnode] := U.find(pclass)
                         parents[eclass] := newParents.snapshot()
                         traceln("repaired", eclass, oldParents, parents[eclass])
@@ -266,13 +273,34 @@ invariant maintenance will be turned into an iterative series of batches.
                         rv.push([c] + m)
             return rv.snapshot()
 
-        to extract(a):
-            "A representative of e-class `a`."
+        to extract(a, nodeOrder):
+            "
+            A representative of e-class `a`.
 
-            def rep := eM[U.find(a)].asList()[0]
-            return switch (rep):
-                match [==leaf, x]:
-                    x
-                match [f] + args:
-                    [f] + [for arg in (args) egraph.extract(arg)]
+            Nodes will be preferred according to `nodeOrder`. Leaves are
+            always more preferred than any node, and nodes not in the order
+            will be left for last.
+            "
+
+            def nodeKeys := [for k => v in (nodeOrder) v => k]
+            def schwartzian := makeSchwartzian.fromKeyFunction(fn [f] + _ {
+                if (f == leaf) { -1 } else {
+                    nodeKeys.fetch(f, fn { Infinity })
+                }
+            })
+
+            def go(class, seen :Set):
+                def reps := eM[U.find(class)].asList()
+                for rep in (schwartzian.sort(reps)):
+                    def ej := __continue
+                    return switch (rep):
+                        match [==leaf, x]:
+                            x
+                        match [f] + args:
+                            [f] + [for arg in (args) {
+                                if (seen.contains(arg)) { ej() }
+                                go(arg, seen.with(arg))
+                            }]
+
+            return go(a, [a].asSet())
 ```
