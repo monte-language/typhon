@@ -25,10 +25,12 @@ machine](http://leodemoura.github.io/files/ematching.pdf), with a few
 simplifications.
 
 For a variety of sanity reasons, it will be easiest for us to tag all leaf
-nodes with a sentinel value.
+nodes with a sentinel value. It will also be easy if this value always
+compares less than non-leaf values.
 
 ```
-object leaf as DeepFrozen {}
+def leaf.op__cmp(other) as DeepFrozen:
+    return (leaf == other).pick(0, -1)
 ```
 
 We will want to compile our leaf comparisons before our branch comparisons, to
@@ -58,7 +60,7 @@ def compile(W :Map, V :Map, o :Int) as DeepFrozen:
         ["yield"] + [for i in (V) i]
     } else {
         # Put subpatterns at the end.
-        def i := makeSchwartzian(subpatternsLast).sortValues().getKeys()[0]
+        def i := makeSchwartzian(subpatternsLast).sortValues(W).getKeys()[0]
         switch (W[i]) {
             match [==leaf, t] { ["check", i, t, compile(W.without(i), V, o)] }
             match [f] + p {
@@ -74,7 +76,7 @@ def compile(W :Map, V :Map, o :Int) as DeepFrozen:
 
 def compilePattern(pattern) as DeepFrozen:
     def [f] + ps := pattern
-    return [f, compile([for i => p in (ps) i => p], [].asMap(), ps.size())]
+    return [f, ps.size(), compile([for i => p in (ps) i => p], [].asMap(), ps.size())]
 ```
 
 To run the abstract machine, we'll embed a state machine into an iterator.
@@ -84,18 +86,22 @@ def makeMatcher(egraph, t, program) as DeepFrozen:
     return def matcher._makeIterator():
         # p4
         var pc := program
-        def reg := t.diverge()
+        def reg := t.diverge(Int)
         def bstack := [].diverge()
         var i := 0
         return def matcherIterator.next(ej):
             while (true):
+                traceln("matcher VM", pc)
+                traceln("registers", reg.snapshot())
+                traceln("stack", bstack.snapshot())
                 switch (pc):
                     match [=="bind", i, f, o, next]:
                         def appsf := egraph.terms(reg[i], f)
                         bstack.push(["choose-app", o, next, appsf, 0])
                         pc := "backtrack"
                     match [=="check", i, t, next]:
-                        pc := if (egraph.find(reg[i]) == egraph.find(t)) {
+                        def r := egraph.add([leaf, t])
+                        pc := if (egraph.find(reg[i]) == egraph.find(r)) {
                             next
                         } else { "backtrack" }
                     match [=="compare", i, j, next]:
@@ -113,6 +119,9 @@ def makeMatcher(egraph, t, program) as DeepFrozen:
                     match [=="choose-app", o, next, s, j]:
                         # XXX known at compile time?
                         if (s.size() > j):
+                            # Set up registers.
+                            while ((o + s[j].size()) > reg.size()):
+                                reg.push(-1)
                             for i => t in (s[j]):
                                 reg[o + i] := t
                             bstack.push(["choose-app", o, next, s, j + 1])
@@ -158,7 +167,7 @@ parent map is through representative keys only, so we must be careful to
             "Include `n` as an e-node, returning its e-class."
 
             def enode := canonicalize(n)
-            return escape ej { H.fetch(enode, ej) } catch _ {
+            def rv := escape ej { H.fetch(enode, ej) } catch _ {
                 def eclass := U.freshClass()
                 eM[eclass] := [enode].asSet()
                 if (enode =~ [!=leaf] + args) {
@@ -172,6 +181,8 @@ parent map is through representative keys only, so we must be careful to
                 H[enode] := eclass
                 eclass
             }
+            traceln(`add($n) (enode: ${canonicalize(n)}) -> $rv`)
+            return rv
 ```
 
 The egg design deliberately breaks invariants after each merge operation, and
@@ -228,7 +239,9 @@ invariant maintenance will be turned into an iterative series of batches.
         to find(a):
             "The canonical representative of e-class `a`."
 
-            return U.find(a)
+            def rv := U.find(a)
+            traceln(`find($a) -> $rv`)
+            return rv
 
         to nodes(a):
             "The e-nodes of e-class `a`."
@@ -239,16 +252,27 @@ invariant maintenance will be turned into an iterative series of batches.
             def rv := [].diverge()
             for c in (eM[U.find(a)]):
                 def [==f] + args exit __continue := c
-                rv.push(c)
+                rv.push(args)
             return rv.snapshot()
 
         to ematch(p):
-            def [f, program] := compilePattern(p)
+            def [f, arity, program] := compilePattern(p)
+            traceln("ematch", program)
             def rv := [].diverge()
             for c => nodes in (eM):
                 for node in (nodes):
-                    def [==f] + args exit __continue := node
+                    def [==f] + args ? (args.size() == arity) exit __continue := node
                     for m in (makeMatcher(egraph, args, program)):
-                        rv.push(m)
+                        rv.push([c] + m)
             return rv.snapshot()
+
+        to extract(a):
+            "A representative of e-class `a`."
+
+            def rep := eM[U.find(a)].asList()[0]
+            return switch (rep):
+                match [==leaf, x]:
+                    x
+                match [f] + args:
+                    [f] + [for arg in (args) egraph.extract(arg)]
 ```
