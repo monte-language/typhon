@@ -31,19 +31,37 @@ def nodeOrder :List[Str] := [
     "MethodCallExpr",
 ]
 
+def patts :DeepFrozen := [
+    ["MethodCallExpr",
+        ["NounExpr", [leaf, "true"]],
+        [leaf, "pick"],
+        ["list", 1, 2],
+        3,
+    ] => 1,
+    ["MethodCallExpr",
+        ["NounExpr", [leaf, "false"]],
+        [leaf, "pick"],
+        ["list", 1, 2],
+        3,
+    ] => 2,
+]
+
+def applyMatchOnto(egraph, rhs, m) as DeepFrozen:
+    return switch (rhs):
+        match i :Int:
+            return m[i]
+
 def rewrite(expr) as DeepFrozen:
     def egraph := makeEGraph()
     def topclass := expr(intoEGraph(egraph))
     traceln("before rewriting", egraph)
-    def patt := ["MethodCallExpr",
-        ["NounExpr", [leaf, "true"]],
-        [leaf, "pick"],
-        ["list", 0, 1],
-        2,
-    ]
-    def matches := egraph.ematch(patt)
-    for [top, nargs, x, y] in (matches):
-        egraph.mergePairs([[top, x]])
+    def pairs := [].diverge()
+    for lhs => rhs in (patts):
+        def matches := egraph.ematch(lhs)
+        for m in (matches):
+            traceln("applying match", lhs, rhs, m)
+            pairs.push([m[0], applyMatchOnto(egraph, rhs, m)])
+    egraph.mergePairs(pairs.snapshot())
     traceln("after rewriting", egraph)
     def topnode := egraph.extract(topclass, nodeOrder)
     return topnode

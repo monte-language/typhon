@@ -57,7 +57,7 @@ The actual compiler follows the original design.
 # p6
 def compile(W :Map, V :Map, o :Int) as DeepFrozen:
     return if (W.isEmpty()) {
-        ["yield"] + [for i in (V) i]
+        ["yield"] + [for i in (V.sortKeys()) i]
     } else {
         # Put subpatterns at the end.
         def schwartzian := makeSchwartzian.fromComparison(subpatternsLast)
@@ -92,9 +92,6 @@ def makeMatcher(egraph, t, program) as DeepFrozen:
         var i := 0
         return def matcherIterator.next(ej):
             while (true):
-                traceln("matcher VM", pc)
-                traceln("registers", reg.snapshot())
-                traceln("stack", bstack.snapshot())
                 switch (pc):
                     match [=="bind", i, f, o, next]:
                         def appsf := egraph.terms(reg[i], f)
@@ -238,7 +235,6 @@ invariant maintenance will be turned into an iterative series of batches.
                                 H.removeKey(parent)
                             H[pnode] := newParents[pnode] := U.find(pclass)
                         parents[eclass] := newParents.snapshot()
-                        traceln("repaired", eclass, oldParents, parents[eclass])
 
                     # Reset the classlist.
                     classlist.clear()
@@ -264,7 +260,6 @@ invariant maintenance will be turned into an iterative series of batches.
 
         to ematch(p):
             def [f, arity, program] := compilePattern(p)
-            traceln("ematch", program)
             def rv := [].diverge()
             for c => nodes in (eM):
                 for node in (nodes):
@@ -290,8 +285,8 @@ invariant maintenance will be turned into an iterative series of batches.
             })
 
             def go(class, seen :Set):
-                def reps := eM[U.find(class)].asList()
-                for rep in (schwartzian.sort(reps)):
+                def reps := schwartzian.sort(eM[U.find(class)].asList())
+                for rep in (reps):
                     def ej := __continue
                     return switch (rep):
                         match [==leaf, x]:
