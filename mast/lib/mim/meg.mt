@@ -39,26 +39,6 @@ def nodeOrder :List[Str] := [
     "MethodCallExpr",
 ]
 
-def patts :DeepFrozen := [
-    ["MethodCallExpr",
-        ["NounExpr", [leaf, "true"]],
-        [leaf, "pick"],
-        ["list", 1, 2],
-        3,
-    ] => 1,
-    ["MethodCallExpr",
-        ["NounExpr", [leaf, "false"]],
-        [leaf, "pick"],
-        ["list", 1, 2],
-        3,
-    ] => 2,
-]
-
-def applyMatchOnto(egraph, rhs, m) as DeepFrozen:
-    return switch (rhs):
-        match i :Int:
-            return m[i]
-
 object unknownValue as DeepFrozen {}
 object constant as DeepFrozen {}
 
@@ -115,6 +95,21 @@ object monteAnalysis as DeepFrozen:
         } else { class }
 
 def rewrite(expr) as DeepFrozen:
+    def patts := [
+        ["MethodCallExpr",
+            ["NounExpr", [leaf, "true"]],
+            [leaf, "pick"],
+            ["list", 1, 2],
+            3,
+        ] => fn m, _ { m[1] },
+        ["MethodCallExpr",
+            ["NounExpr", [leaf, "false"]],
+            [leaf, "pick"],
+            ["list", 1, 2],
+            3,
+        ] => fn m, _ { m[2] },
+    ]
+
     def egraph := makeEGraph(monteAnalysis)
     def topclass := expr(intoEGraph(egraph))
     traceln("before rewriting", egraph)
@@ -123,10 +118,13 @@ def rewrite(expr) as DeepFrozen:
         def matches := egraph.ematch(lhs)
         for m in (matches):
             traceln("applying match", lhs, rhs, m)
-            pairs.push([m[0], applyMatchOnto(egraph, rhs, m)])
+            pairs.push([m[0], rhs(m, egraph)])
     egraph.mergePairs(pairs.snapshot())
     traceln("after rewriting", egraph)
     def analysis := egraph.analyze(topclass)
     traceln("analysis", analysis)
-    def topnode := egraph.extract(topclass, nodeOrder)
-    return topnode
+    return if (analysis =~ [==constant, x]) {
+        ["LiteralExpr", x, null]
+    } else {
+        egraph.extract(topclass, nodeOrder)
+    }
