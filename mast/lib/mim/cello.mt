@@ -1,5 +1,6 @@
 import "lib/mim/anf" =~ [=> makeNormal]
 import "lib/mim/expand" =~ [=> expand]
+import "lib/mim/syntax/cello" =~ ["ASTBuilder" => celloBuilder]
 exports (main)
 
 def outers :Map[Str, Bytes] := [
@@ -16,35 +17,62 @@ def outers :Map[Str, Bytes] := [
 # by line onto `lines`. Patterns write C statements and return information
 # about which local names were written.
 
+object cello as DeepFrozen:
+    to new(type :Str, params):
+        return celloBuilder.Call("new", [celloBuilder.Name(type)] + params)
+
 def compileProgramOnto(expr, lines) :Bytes as DeepFrozen:
     var locals := [].asMap()
     object compiler:
         to LiteralExpr(x, _span):
             return switch (x) {
-                match i :Int { b`new(Int, $$I(${M.toString(i)}))` }
+                match i :Int {
+                    cello.new("Int", [
+                        celloBuilder.Call("$I", [celloBuilder.Int(i)]),
+                    ])
+                }
             }
 
         to NounExpr(name, _span):
             return if (outers.contains(name)) {
-                b`copy($$(Function, ${outers[name]}))`
-            } else { b`$name` }
+                celloBuilder.Call("copy", [
+                    celloBuilder.Call("$", [
+                        celloBuilder.Name("Function"),
+                        celloBuilder.Name(outers[name]),
+                    ]),
+                ])
+            } else { celloBuilder.Name(name) }
 
         to Atom(atom, _span):
             return atom
 
         to LetExpr(pattern, expr, body, _span):
-            locals |= pattern(expr, b`copy($$(Function, nullObj))`)
+            def ej := celloBuilder.Call("copy", [
+                celloBuilder.Call("$", [
+                    celloBuilder.Name("Function"),
+                    celloBuilder.Name("nullObj"),
+                ]),
+            ])
+            locals |= pattern(expr, ej)
             return body
 
         to MethodCallExpr(receiver, verb :Str, args, _namedArgs, _span):
-            def newVerb := b`new(String, $$S(${M.toQuote(verb)}))`
-            def packedArgs := b`new(Tuple, ${b`,`.join(args)})`
+            def newVerb := cello.new("String", [
+                celloBuilder.Call("$S", [celloBuilder.Str(M.toQuote(verb))]),
+            ])
+            def packedArgs := cello.new("Tuple", args)
             # XXX namedArgs
-            def emptyMap := b`new(Table, Ref, Ref)`
-            return b`call($receiver, $newVerb, $packedArgs, $emptyMap)`
+            def emptyMap := cello.new("Table", [
+                celloBuilder.Name("Ref"),
+                celloBuilder.Name("Ref"),
+            ])
+            return celloBuilder.Call("call", [
+                receiver, newVerb, packedArgs, emptyMap,
+            ])
 
         to IfExpr(test, cons, alt, _span):
-            return b`isTrue($test) ? ($cons) : ($alt)`
+            return celloBuilder.Ternary(celloBuilder.Call("isTrue", [test]),
+                                        cons, alt)
 
         to FinalPattern(noun, guard, _span):
             return fn expr, ej {
@@ -62,6 +90,40 @@ def compileProgramOnto(expr, lines) :Bytes as DeepFrozen:
         match [verb, args, _]:
             throw(`Next to do: $verb/${args.size()}`)
     return expr(compiler)
+
+object asUglyC as DeepFrozen:
+    to Procedure(rtype, name :Str, params, body):
+        def ps := ",".join(params)
+        def b := "\n".join(body)
+        return `$rtype $name($ps) { $b }`
+
+    to Statement(expr):
+        return expr + ";"
+
+    to Declare(lhs, rhs):
+        return `$lhs = $rhs;`
+
+    to Ret(expr):
+        return `return $expr;`
+
+    to Int(i):
+        return M.toString(i)
+
+    to Str(s):
+        return M.toQuote(s)
+
+    to Name(n):
+        return n
+
+    to Call(name, args):
+        def a := ",".join(args)
+        return `$name($a)`
+
+    to Ternary(test, cons, alt):
+        return `($test) ? ($cons) : ($alt)`
+
+    to TypedName(type, name):
+        return type + " " + name
 
 def buildEntrypoint(lines :List[Bytes], module :Bytes) :Bytes as DeepFrozen:
     def preamble := b`$\n`.join(lines)
