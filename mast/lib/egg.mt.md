@@ -98,7 +98,7 @@ def makeMatcher(egraph, t, program) as DeepFrozen:
                         bstack.push(["choose-app", o, next, appsf, 0])
                         pc := "backtrack"
                     match [=="check", i, t, next]:
-                        def r := egraph.add([leaf, t])
+                        def r := egraph.add([leaf, t], null)
                         pc := if (egraph.find(reg[i]) == egraph.find(r)) {
                             next
                         } else { "backtrack" }
@@ -168,8 +168,12 @@ analysis.
             out.print(`<e-graph, ${U.partitions()} e-classes, ${H.size()} e-nodes>`)
 
         # p5
-        to add(n) :Int:
-            "Include `n` as an e-node, returning its e-class."
+        to add(n, seed) :Int:
+            "
+            Include `n` as an e-node, returning its e-class.
+
+            Optionally include `seed` data for analysis.
+            "
 
             def enode := canonicalize(n)
             def rv := escape ej { H.fetch(enode, ej) } catch _ {
@@ -183,7 +187,7 @@ analysis.
                     }
                 }
                 H[enode] := eclass
-                def d := data[eclass] := analysis.make(enode, egraph)
+                def d := data[eclass] := analysis.make(enode, seed, egraph)
                 eM[eclass] := analysis.modify([enode].asSet(), d)
                 eclass
             }
@@ -257,7 +261,7 @@ invariant maintenance will be turned into an iterative series of batches.
                             for parent => pclass in (newParents):
                                 # Try sprouting a leaf in the joinsemilattice
                                 # and see if it makes a difference.
-                                def newLeaf := analysis.make(parent, egraph)
+                                def newLeaf := analysis.make(parent, null, egraph)
                                 def oldData := data[pclass]
                                 def newData := analysis.join(newLeaf, oldData)
                                 if (newData != oldData):

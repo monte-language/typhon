@@ -7,31 +7,31 @@ def intoEGraph(egraph) as DeepFrozen:
     "
 
     def maybe(expr):
-        return if (expr == null) { egraph.add([leaf, null]) } else { expr }
+        return if (expr == null) { egraph.add([leaf, null], null) } else { expr }
 
     return object eGraphInsertion:
         to LiteralExpr(x, span):
-            return egraph.add([leaf, x])
+            return egraph.add([leaf, x], span)
 
         to NounExpr(n, span):
-            return egraph.add(["NounExpr", egraph.add([leaf, n])])
+            return egraph.add(["NounExpr", egraph.add([leaf, n], span)], span)
 
         to MethodCallExpr(target, verb :Str, args, namedArgs, span):
-            def v := egraph.add([leaf, verb])
-            def a := egraph.add(["list"] + args)
-            def na := egraph.add(["list"] + namedArgs)
-            return egraph.add(["MethodCallExpr", target, v, a, na])
+            def v := egraph.add([leaf, verb], span)
+            def a := egraph.add(["list"] + args, span)
+            def na := egraph.add(["list"] + namedArgs, span)
+            return egraph.add(["MethodCallExpr", target, v, a, na], span)
 
         to FinalPattern(noun :Str, guard, span):
-            def n := egraph.add([leaf, noun])
+            def n := egraph.add([leaf, noun], span)
             def g := maybe(guard)
-            return egraph.add(["FinalPattern", n, g])
+            return egraph.add(["FinalPattern", n, g], span)
 
         match [verb, args, _]:
             # The args are already inserted, so they should be e-classes now.
             # But the final arg is a span.
             def span := args.last()
-            egraph.add([verb] + args.slice(0, args.size() - 1))
+            egraph.add([verb] + args.slice(0, args.size() - 1), span)
 
 # Our preference for certain node constructors.
 def nodeOrder :List[Str] := [
@@ -57,40 +57,52 @@ def allConstant(egraph) as DeepFrozen:
         return rv.snapshot()
 
 object monteAnalysis as DeepFrozen:
-    to make(n, egraph):
-        return switch (n):
-            match [==leaf, x]:
-                [constant, x]
-            match [=="Atom", a]:
-                egraph.analyze(a)
-            match [=="list"] + via (allConstant(egraph)) elts:
+    to make(n, span, egraph):
+        def val := switch (n) {
+            match [==leaf, x] { [constant, x] }
+            match [=="Atom", a] { egraph.analyze(a) }
+            match [=="list"] + via (allConstant(egraph)) elts {
                 [constant, elts]
+            }
             match [=="MethodCallExpr",
                    via (isConstant(egraph)) target,
                    via (isConstant(egraph)) verb :Str,
                    via (isConstant(egraph)) args :List,
-                   via (isConstant(egraph)) _]:
+                   via (isConstant(egraph)) _] {
                 # XXX nargs
                 [constant, M.call(target, verb, args, [].asMap())]
-            match _:
+            }
+            match _ {
                 traceln("um", n)
                 unknownValue
+            }
+        }
+        return [val, span]
 
     to join(d1, d2):
-        return switch ([d1, d2]):
-            match [==unknownValue, d]:
-                d
-            match [d, ==unknownValue]:
-                d
-            match [[==constant, x], d]:
+        # Join the spans.
+        def [v1, s1] := d1
+        def [v2, s2] := d2
+        def span := if (s1 == null) { s2 } else if (s2 == null) { s1 } else {
+            s1.combine(s2)
+        }
+        def val := switch ([v1, v2]) {
+            match [==unknownValue, d] { d }
+            match [d, ==unknownValue] { d }
+            match [[==constant, x], d] {
                 traceln(`Constraint $x : $d`)
                 [constant, x]
-            match [d, [==constant, x]]:
+            }
+            match [d, [==constant, x]] {
                 traceln(`Constraint $x : $d`)
                 [constant, x]
+            }
+        }
+        return [val, span]
 
     to modify(class, d):
-        return if (d =~ [==constant, x]) {
+        def [v, _span] := d
+        return if (v =~ [==constant, x]) {
             class.with([leaf, x])
         } else { class }
 
@@ -121,10 +133,9 @@ def rewrite(expr) as DeepFrozen:
             pairs.push([m[0], rhs(m, egraph)])
     egraph.mergePairs(pairs.snapshot())
     traceln("after rewriting", egraph)
-    def analysis := egraph.analyze(topclass)
-    traceln("analysis", analysis)
-    return if (analysis =~ [==constant, x]) {
-        ["LiteralExpr", x, null]
+    def [val, span] := egraph.analyze(topclass)
+    return if (val =~ [==constant, x]) {
+        ["LiteralExpr", x, span]
     } else {
-        egraph.extract(topclass, nodeOrder)
+        egraph.extract(topclass, nodeOrder).with(span)
     }
