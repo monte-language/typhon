@@ -6,6 +6,7 @@ expr = LiteralExpr(df value)
      | MethodCallExpr(expr receiver, str verb, expr* args, namedArg*
                       namedArgs)
      | DefExpr(pattern pattern, expr? exit, expr expr)
+     | AssignExpr(str noun, expr expr)
      | ObjectExpr(str? docstring, pattern name, expr? asExpr,
                   expr* auditors, script script)
      | CatchExpr(expr body, pattern pattern, expr catcher)

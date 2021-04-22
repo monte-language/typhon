@@ -97,10 +97,19 @@ def expand(ast :DeepFrozen) as DeepFrozen:
             # XXX expand circular definitions
             return mb.DefExpr(patt, ex, expr, span)
 
+        to AssignExpr(lhs, rhs, span):
+            # XXX expand LHS calls
+            return mb.AssignExpr(lhs(nounName), rhs, span)
+
         to AugAssignExpr(op :Str, lvalue, rvalue, span):
             return mb.AssignExpr(lvalue,
                                  xp.BinaryExpr(lvalue, op, rvalue, span),
                                  span)
+
+        to ExitExpr(branch :Str, arg, span):
+            def noun := mb.NounExpr("__" + branch, span)
+            def args := if (arg == null) { [] } else { [arg] }
+            return mb.MethodCallExpr(noun, "run", args, [], span)
 
         to ListExpr(exprs, span):
             return mb.MethodCallExpr(ex(m`_makeList`), "run", exprs, [], span)
@@ -127,10 +136,18 @@ def expand(ast :DeepFrozen) as DeepFrozen:
             return mb.MethodCallExpr(ex(m`_makeMap`), "fromPairs", ps, [],
                                      span)
 
+        to FunctionExpr(patts :List, namedPatts :List, block, span):
+            def m := mb."Method"(null, "run", patts, namedPatts, null, block, span)
+            return mb.ObjectExpr(null, mb.IgnorePattern(null, span), null, [],
+                                 mb.Script(null, [m], [], span), span)
+
         # Patterns.
 
         to FinalPattern(expr, guard, span):
             return mb.FinalPattern(expr(nounName), guard, span)
+
+        to VarPattern(expr, guard, span):
+            return mb.VarPattern(expr(nounName), guard, span)
 
         to BindingPattern(expr, guard, span):
             return mb.BindingPattern(expr(nounName), guard, span)
@@ -163,4 +180,20 @@ def expand(ast :DeepFrozen) as DeepFrozen:
             return mb.ViaPattern(mb.MethodCallExpr(ex(m`_matchSame`), verb,
                                                    [value], [], span),
                                  mb.IgnorePattern(null, span), span)
+
+        # Methods.
+
+        to "To"(docstring, verb :Str, params :List, namedParams :List, guard,
+                block, span):
+            def body := mb.EscapeExpr(ex(mpatt`__return`),
+                mb.SeqExpr([block, ex(m`null`)], span), null, null, span)
+            return mb."Method"(docstring, verb, params, namedParams, guard,
+                               body, span)
+
+        # Scripts.
+
+        to FunctionScript(verb :Str, params :List, namedParams :List, guard,
+                          block, span):
+            def m := xp."To"(null, verb, params, namedParams, guard, block, span)
+            return mb.Script(null, [m], [], span)
     return rebuild(ast, xp)
