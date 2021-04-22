@@ -9,6 +9,9 @@ def intoEGraph(egraph) as DeepFrozen:
     def maybe(expr):
         return if (expr == null) { egraph.add([leaf, null], null) } else { expr }
 
+    def many(exprs :List, span):
+        return egraph.add(["list"] + exprs, span)
+
     return object eGraphInsertion:
         to LiteralExpr(x, span):
             return egraph.add([leaf, x], span)
@@ -16,16 +19,62 @@ def intoEGraph(egraph) as DeepFrozen:
         to NounExpr(n, span):
             return egraph.add(["NounExpr", egraph.add([leaf, n], span)], span)
 
+        to DefExpr(patt, ej, expr, span):
+            return egraph.add(["DefExpr", patt, maybe(ej), expr], span)
+
+        to AssignExpr(noun, expr, span):
+            def n := egraph.add([leaf, noun], span)
+            return egraph.add(["AssignExpr", n, expr], span)
+
         to MethodCallExpr(target, verb :Str, args, namedArgs, span):
             def v := egraph.add([leaf, verb], span)
-            def a := egraph.add(["list"] + args, span)
-            def na := egraph.add(["list"] + namedArgs, span)
+            def a := many(args, span)
+            def na := many(namedArgs, span)
             return egraph.add(["MethodCallExpr", target, v, a, na], span)
+
+        to IfExpr(test, cons, alt, span):
+            # NB: We could discriminate between one-armed and two-armed
+            # if-expressions here, but this is easier to pattern-match.
+            return egraph.add(["IfExpr", test, cons, maybe(alt)], span)
+
+        to EscapeExpr(ejPatt, ejBody, catchPatt, catchBody, span):
+            return egraph.add(["EscapeExpr", ejPatt, ejBody, maybe(catchPatt),
+                               maybe(catchBody)], span)
+
+        to SeqExpr(exprs :List, span):
+            # XXX revisit when pattern-matching lists?
+            return egraph.add(["SeqExpr"] + exprs, span)
+
+        to ObjectExpr(docstring, name, asExpr, auditors, script, span):
+            return egraph.add(["ObjectExpr", maybe(docstring), name,
+                               maybe(asExpr), many(auditors, span), script],
+                               span)
 
         to FinalPattern(noun :Str, guard, span):
             def n := egraph.add([leaf, noun], span)
             def g := maybe(guard)
             return egraph.add(["FinalPattern", n, g], span)
+
+        to VarPattern(noun :Str, guard, span):
+            def n := egraph.add([leaf, noun], span)
+            def g := maybe(guard)
+            return egraph.add(["VarPattern", n, g], span)
+
+        to IgnorePattern(guard, span):
+            return egraph.add(["IgnorePattern", maybe(guard)], span)
+
+        to "Method"(docstring, verb :Str, params :List, namedParams :List,
+                    resultGuard, body, span):
+            def ds := egraph.add([leaf, docstring], span)
+            def v := egraph.add([leaf, verb], span)
+            def ps := many(params, span)
+            def nps := many(namedParams, span)
+            return egraph.add(["Method", ds, v, ps, nps, maybe(resultGuard),
+                               body], span)
+
+        to "Script"(ext, meths, matchers, span):
+            return egraph.add(["Script", maybe(ext), many(meths, span),
+                               many(matchers, span)], span)
 
         match [verb, args, _]:
             # The args are already inserted, so they should be e-classes now.
