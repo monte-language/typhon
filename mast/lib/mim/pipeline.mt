@@ -1,6 +1,7 @@
 # import "unittest" =~ [=> unittest :Any]
 # import "tests/acceptance" =~ [=> acceptanceSuite]
 import "lib/mim/expand" =~ [=> expand]
+import "lib/mim/audit" =~ [=> holdAuditions]
 import "lib/mim/anf" =~ [=> makeNormal]
 # import "lib/mim/mix" =~ [=> makeMixer]
 exports (go, pretty, evaluate)
@@ -89,14 +90,16 @@ object pretty as DeepFrozen:
         return `${" ".join(methods)} $ms`
 
 def go(expr :DeepFrozen) as DeepFrozen:
-    def normalized := makeNormal().alpha(expand(expr))
+    def audited := expand(expr)(holdAuditions)
+    return audited
+    # def normalized := makeNormal().alpha(audited)
+    # return normalized
     # def reductionBasis := [
     #     => &&true, => &&false, => &&null,
     #     => &&_makeList,
     #     => &&Bool, => &&Char, => &&Double, => &&Int, => &&Str,
     # ]
     # return makeMixer(anf, reductionBasis).mix(normalized, [].asMap())
-    return normalized
 
 def b :DeepFrozen := "&&".add
 
