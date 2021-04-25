@@ -81,7 +81,7 @@ def main(argv, => makeFileResource) as DeepFrozen:
     } closed {
         harness := "closed"
     }
-    def [pn, out] := parser(argv)
+    def [_, _, pn, out] := parser(argv)
     traceln(`Making muffin out of $pn`)
     return when (var m := loadTopLevelMuffin(loader, pn)) ->
         m := harnesses[harness](m, pn)

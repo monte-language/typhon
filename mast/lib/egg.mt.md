@@ -321,18 +321,17 @@ invariant maintenance will be turned into an iterative series of batches.
                 }
             })
 
-            def go(class, seen :Set):
-                def reps := schwartzian.sort(eM[U.find(class)].asList())
-                for rep in (reps):
-                    def ej := __continue
-                    return switch (rep):
-                        match [==leaf, x]:
-                            x
-                        match [f] + args:
-                            [f] + [for arg in (args) {
-                                if (seen.contains(arg)) { ej() }
-                                go(arg, seen.with(arg))
-                            }]
+            return schwartzian.sort(eM[U.find(a)].asList())[0]
 
-            return go(a, [a].asSet())
+        to extractFiltered(a, pred):
+            "
+            A representative of e-class `a` satisfying predicate `pred`.
+
+            "
+
+            for node in (eM[U.find(a)]):
+                def [f] + args := node
+                if (pred(f)):
+                    return node
+            throw(`No members of e-class $a satisfy $pred`)
 ```

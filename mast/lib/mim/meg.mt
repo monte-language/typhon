@@ -1,3 +1,4 @@
+import "lib/mim/syntax/kernel" =~ ["ASTBuilder" => monteBuilder]
 import "lib/egg" =~ [=> leaf, => makeEGraph]
 exports (intoEGraph, rewrite)
 
@@ -42,8 +43,13 @@ def intoEGraph(egraph) as DeepFrozen:
                                maybe(catchBody)], span)
 
         to SeqExpr(exprs :List, span):
-            # XXX revisit when pattern-matching lists?
-            return egraph.add(["SeqExpr"] + exprs, span)
+            # Right-associate for sanity; [SeqExpr, e1, e2] is like
+            # a let-expression in terms of scoping.
+            def [last] + init := exprs.reverse()
+            var rv := last
+            for expr in (init):
+                rv := egraph.add(["SeqExpr", expr, rv], span)
+            return rv
 
         to ObjectExpr(docstring, name, asExpr, auditors, script, span):
             return egraph.add(["ObjectExpr", maybe(docstring), name,
@@ -81,12 +87,6 @@ def intoEGraph(egraph) as DeepFrozen:
             # But the final arg is a span.
             def span := args.last()
             egraph.add([verb] + args.slice(0, args.size() - 1), span)
-
-# Our preference for certain node constructors.
-def nodeOrder :List[Str] := [
-    "NounExpr",
-    "MethodCallExpr",
-]
 
 object unknownValue as DeepFrozen {}
 object constant as DeepFrozen {}
@@ -155,6 +155,70 @@ object monteAnalysis as DeepFrozen:
             class.with([leaf, x])
         } else { class }
 
+# Our preference for certain node constructors.
+def exprOrder :List[Str] := [
+    "NounExpr",
+    "MethodCallExpr",
+]
+
+def extractTree(egraph) as DeepFrozen:
+    return object extract:
+        to constant(eclass :Int):
+            def [[==constant, rv], _span] := egraph.analyze(eclass)
+            return rv
+
+        to listOf(extractor, eclass :Int):
+            def [_] + args := egraph.extractFiltered(eclass, fn f { f == "list" })
+            return [for arg in (args) extractor(arg)]
+
+        to patt(eclass :Int):
+            def [_, span] := egraph.analyze(eclass)
+            def [constructor] + args := egraph.extractFiltered(eclass, fn f { f.endsWith("Pattern") })
+            return switch (constructor):
+                match =="FinalPattern":
+                    def n :Str := extract.constant(args[0])
+                    def g := extract.expr(args[1])
+                    monteBuilder.FinalPattern(n, g, span)
+
+        to expr(eclass :Int):
+            def [val, span] := egraph.analyze(eclass)
+            # Look for constants first.
+            return if (val =~ [==constant, x]) {
+                if (x != null) { monteBuilder.LiteralExpr(x, span) }
+            } else {
+                def [constructor] + args := egraph.extract(eclass, exprOrder)
+                switch (constructor) {
+                    match =="NounExpr" {
+                        def n :Str := extract.constant(args[0])
+                        monteBuilder.NounExpr(n, span)
+                    }
+                    match =="MethodCallExpr" {
+                        def target := extract.expr(args[0])
+                        def verb :Str := extract.constant(args[1])
+                        def newArgs := extract.listOf(extract.expr, args[2])
+                        def namedArgs := extract.listOf(extract.expr, args[3])
+                        monteBuilder.MethodCallExpr(target, verb, newArgs, namedArgs, span)
+                    }
+                    match =="DefExpr" {
+                        def patt := extract.patt(args[0])
+                        def ex := extract.expr(args[1])
+                        def rhs := extract.expr(args[2])
+                        monteBuilder.DefExpr(patt, ex, rhs, span)
+                    }
+                    match =="SeqExpr" {
+                        def exprs := [].diverge()
+                        def go(ec :Int) {
+                            def [constructor] + seqArgs := egraph.extract(ec, exprOrder)
+                            if (constructor == "SeqExpr") {
+                                for seqArg in (seqArgs) { go(seqArg) }
+                            } else { exprs.push(extract.expr(ec)) }
+                        }
+                        for arg in (args) { go(arg) }
+                        monteBuilder.SeqExpr(exprs.snapshot(), span)
+                    }
+                }
+            }
+
 def rewrite(expr) as DeepFrozen:
     def patts := [
         ["MethodCallExpr",
@@ -182,9 +246,4 @@ def rewrite(expr) as DeepFrozen:
             pairs.push([m[0], rhs(m, egraph)])
     egraph.mergePairs(pairs.snapshot())
     traceln("after rewriting", egraph)
-    def [val, span] := egraph.analyze(topclass)
-    return if (val =~ [==constant, x]) {
-        ["LiteralExpr", x, span]
-    } else {
-        egraph.extract(topclass, nodeOrder).with(span)
-    }
+    return extractTree(egraph).expr(topclass)
