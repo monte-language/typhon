@@ -159,7 +159,10 @@ object monteAnalysis as DeepFrozen:
 def exprOrder :List[Str] := [
     "NounExpr",
     "MethodCallExpr",
+    # NB: Old benchmarking shows that ejectors have roughly 4x the overhead of
+    # checking Boolean values and branching.
     "IfExpr",
+    "EscapeExpr",
 ]
 
 def extractTree(egraph) as DeepFrozen:
@@ -206,6 +209,16 @@ def extractTree(egraph) as DeepFrozen:
                         def rhs := extract.expr(args[2])
                         monteBuilder.DefExpr(patt, ex, rhs, span)
                     }
+                    match =="EscapeExpr" {
+                        def ejPatt := extract.patt(args[0])
+                        def ejBody := extract.expr(args[1])
+                        def catchBody := extract.expr(args[3])
+                        def catchPatt := if (catchBody != null) {
+                            extract.patt(args[2])
+                        }
+                        monteBuilder.EscapeExpr(ejPatt, ejBody, catchPatt,
+                                                catchBody, span)
+                    }
                     match =="SeqExpr" {
                         def exprs := [].diverge()
                         def go(ec :Int) {
@@ -226,6 +239,14 @@ def extractTree(egraph) as DeepFrozen:
 
 def rewrite(expr) as DeepFrozen:
     def patts := [
+        # Reassociate SeqExprs from the left to the right.
+        ["SeqExpr",
+            ["SeqExpr", 1, 2],
+            3,
+        ] => fn m, eg {
+            eg.add(["SeqExpr", m[1],
+                eg.add(["SeqExpr", m[2], m[3]], null)], null)
+        },
         # Constant-folding for if-expressions and .pick/2.
         ["IfExpr",
             ["NounExpr", [leaf, "true"]],
@@ -249,6 +270,27 @@ def rewrite(expr) as DeepFrozen:
             ["list", 1, 2],
             3,
         ] => fn m, _ { m[2] },
+        # Truncate escape-expression bodies if the ejector is definitely
+        # invoked partway through a sequence of instructions.
+        # Occurs in canonical expansion.
+        ["EscapeExpr",
+            ["FinalPattern", 1, 2],
+            ["SeqExpr",
+                ["MethodCallExpr",
+                    ["NounExpr", 1],
+                    [leaf, "run"],
+                    ["list", 3],
+                    ["list"],
+                ],
+                4,
+            ],
+            5, 6,
+        ] => fn m, eg {
+            eg.add(["EscapeExpr",
+                eg.add(["FinalPattern", m[1], m[2]], null),
+                m[3], m[5], m[6],
+            ], null)
+        }
     ]
 
     def egraph := makeEGraph(monteAnalysis)
