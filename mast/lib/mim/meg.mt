@@ -159,6 +159,7 @@ object monteAnalysis as DeepFrozen:
 def exprOrder :List[Str] := [
     "NounExpr",
     "MethodCallExpr",
+    "IfExpr",
 ]
 
 def extractTree(egraph) as DeepFrozen:
@@ -216,11 +217,26 @@ def extractTree(egraph) as DeepFrozen:
                         for arg in (args) { go(arg) }
                         monteBuilder.SeqExpr(exprs.snapshot(), span)
                     }
+                    match _ {
+                        def newArgs := [for arg in (args) extract.expr(arg)]
+                        M.call(monteBuilder, constructor, newArgs.with(span), [].asMap())
+                    }
                 }
             }
 
 def rewrite(expr) as DeepFrozen:
     def patts := [
+        # Constant-folding for if-expressions and .pick/2.
+        ["IfExpr",
+            ["NounExpr", [leaf, "true"]],
+            1,
+            2,
+        ] => fn m, _ { m[1] },
+        ["IfExpr",
+            ["NounExpr", [leaf, "false"]],
+            1,
+            2,
+        ] => fn m, _ { m[2] },
         ["MethodCallExpr",
             ["NounExpr", [leaf, "true"]],
             [leaf, "pick"],
