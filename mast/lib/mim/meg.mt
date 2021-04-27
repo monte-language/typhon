@@ -158,6 +158,49 @@ object constantValueAnalysis as DeepFrozen:
         }
 
 
+object freeNamesAnalysis as DeepFrozen:
+    to make(n, _span, egraph):
+        def asNoun(eclass, ej):
+            def [==leaf, n :Str] exit ej := egraph.extractFiltered(eclass, fn f {
+                f == leaf
+            })
+            return n
+        def names(eclass, _ej) { return egraph.analyze(eclass)["names"] }
+
+        return switch (n) {
+            match [==leaf, _] { [].asSet() }
+            match [=="list"] + tail {
+                var rv := [].asSet()
+                for eclass in (tail) { rv |= names(eclass, null) }
+                rv
+            }
+            match [=="NounExpr", via (asNoun) n] { [n].asSet() }
+            match [=="MethodCallExpr", via (names) receiver, _verb,
+                   via (names) args, via (names) namedArgs] {
+                receiver | args | namedArgs
+            }
+            match [=="EscapeExpr", via (names) ejPatt, via (names) ejBody,
+                   _, _] {
+                # XXX several things wrong
+                ejBody &! ejPatt
+            }
+            match [=="SeqExpr", via (names) l, via (names) r] {
+                # Still wrong
+                l | r
+            }
+            match [=="FinalPattern", via (asNoun) n, _] {
+                # XXX also wrong
+                [n].asSet()
+            }
+        }
+
+    to join(l, r):
+        return l | r
+
+    to modify(eclass, _names):
+        return eclass
+
+
 object makeRowAnalysis as DeepFrozen:
     "A set of analyses, indexed by name."
 
@@ -178,6 +221,7 @@ object makeRowAnalysis as DeepFrozen:
 def monteAnalysis :DeepFrozen := makeRowAnalysis(
     "span" => spanAnalysis,
     "constant" => constantValueAnalysis,
+    "names" => freeNamesAnalysis,
 )
 
 # Our preference for certain node constructors.
@@ -211,7 +255,7 @@ def extractTree(egraph) as DeepFrozen:
                     monteBuilder.FinalPattern(n, g, span)
 
         to expr(eclass :Int):
-            def [=> constant, => span] := egraph.analyze(eclass)
+            def [=> constant, => span] | _ := egraph.analyze(eclass)
             # Look for constants first.
             return if (constant != unknownValue) {
                 if (constant != null) { monteBuilder.LiteralExpr(constant, span) }
@@ -263,42 +307,52 @@ def extractTree(egraph) as DeepFrozen:
                 }
             }
 
+def always(_, _) :Bool as DeepFrozen { return true }
+
+def isNotFreeIn(nounSlot :Int, exprSlot :Int) as DeepFrozen:
+    return def notFreeCheck(m, egraph) :Bool as DeepFrozen:
+        def [==leaf, n :Str] := egraph.extractFiltered(m[nounSlot], fn f {
+            f == leaf
+        })
+        def [=> names :Set[Str]] | _ := egraph.analyze(m[exprSlot])
+        return !names.contains(n)
+
 def rewrite(expr) as DeepFrozen:
     def patts := [
         # Reassociate SeqExprs from the left to the right.
         ["SeqExpr",
             ["SeqExpr", 1, 2],
             3,
-        ] => fn m, eg {
-            eg.add(["SeqExpr", m[1],
-                eg.add(["SeqExpr", m[2], m[3]], null)], null)
-        },
+        ] => [always, fn m, egraph {
+            egraph.add(["SeqExpr", m[1],
+                egraph.add(["SeqExpr", m[2], m[3]], null)], null)
+        }],
         # Constant-folding for if-expressions and .pick/2.
         ["IfExpr",
             ["NounExpr", [leaf, "true"]],
             1,
             2,
-        ] => fn m, _ { m[1] },
+        ] => [always, fn m, _ { m[1] }],
         ["IfExpr",
             ["NounExpr", [leaf, "false"]],
             1,
             2,
-        ] => fn m, _ { m[2] },
+        ] => [always, fn m, _ { m[2] }],
         ["MethodCallExpr",
             ["NounExpr", [leaf, "true"]],
             [leaf, "pick"],
             ["list", 1, 2],
             3,
-        ] => fn m, _ { m[1] },
+        ] => [always, fn m, _ { m[1] }],
         ["MethodCallExpr",
             ["NounExpr", [leaf, "false"]],
             [leaf, "pick"],
             ["list", 1, 2],
             3,
-        ] => fn m, _ { m[2] },
+        ] => [always, fn m, _ { m[2] }],
         # Truncate escape-expression bodies if the ejector is definitely
         # invoked partway through a sequence of instructions.
-        # Occurs in canonical expansion.
+        # Occurs in canonical expansion of methods.
         ["EscapeExpr",
             ["FinalPattern", 1, 2],
             ["SeqExpr",
@@ -311,23 +365,32 @@ def rewrite(expr) as DeepFrozen:
                 4,
             ],
             5, 6,
-        ] => fn m, eg {
-            eg.add(["EscapeExpr",
-                eg.add(["FinalPattern", m[1], m[2]], null),
+        ] => [always, fn m, egraph {
+            egraph.add(["EscapeExpr",
+                egraph.add(["FinalPattern", m[1], m[2]], null),
                 m[3], m[5], m[6],
             ], null)
-        }
+        }],
+        # Elide escape-expressions when ejectors are not used.
+        ["EscapeExpr", ["FinalPattern", 1, 2], 3, 4, 5] => [
+            isNotFreeIn(1, 3),
+            fn m, _ { m[3] }
+        ]
     ]
 
     def egraph := makeEGraph(monteAnalysis)
     def topclass := expr(intoEGraph(egraph))
     traceln("before rewriting", egraph)
     def pairs := [].diverge()
-    for lhs => rhs in (patts):
-        def matches := egraph.ematch(lhs)
-        for m in (matches):
-            traceln("applying match", lhs, rhs, m)
-            pairs.push([m[0], rhs(m, egraph)])
+    for _ in (0..!2):
+        for lhs => [cond, rhs] in (patts):
+            def matches := egraph.ematch(lhs)
+            for m in (matches):
+                if (cond(m, egraph)):
+                    traceln("applying match", lhs, rhs, m)
+                    pairs.push([m[0], rhs(m, egraph)])
+                else:
+                    traceln("conditional failed", cond, m)
     egraph.mergePairs(pairs.snapshot())
     traceln("after rewriting", egraph)
     return extractTree(egraph).expr(topclass)

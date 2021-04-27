@@ -191,7 +191,7 @@ analysis.
                 eM[eclass] := analysis.modify([enode].asSet(), d)
                 eclass
             }
-            traceln(`add($n) (enode: ${canonicalize(n)}) -> $rv`)
+            # traceln(`add($n) (enode: ${canonicalize(n)}) -> $rv`)
             return rv
 ```
 
@@ -211,7 +211,7 @@ invariant maintenance will be turned into an iterative series of batches.
             def mergelist := pairs.asSet().diverge()
             while (!mergelist.isEmpty()):
                 # merge()
-                traceln("merge()", mergelist)
+                # traceln("merge()", mergelist)
                 def classlist := [].asSet().diverge()
                 for [a, b] in (mergelist):
                     def ra := U.find(a)
@@ -231,12 +231,12 @@ invariant maintenance will be turned into an iterative series of batches.
                 mergelist.clear()
 
                 # rebuild()
-                traceln("rebuild()", classlist)
+                # traceln("rebuild()", classlist)
                 while (!classlist.isEmpty()):
                     for todo in (classlist):
                         def eclass := U.find(todo)
                         # repair()
-                        traceln("repair()", eclass)
+                        # traceln("repair()", eclass)
                         def oldParents := parents.fetch(eclass, fn { [].asMap() })
                         def newParents := [].asMap().diverge()
                         for parent => pclass in (oldParents):
@@ -275,7 +275,7 @@ invariant maintenance will be turned into an iterative series of batches.
             "The canonical representative of e-class `a`."
 
             def rv := U.find(a)
-            traceln(`find($a) -> $rv`)
+            # traceln(`find($a) -> $rv`)
             return rv
 
         to nodes(a):
