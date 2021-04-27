@@ -88,72 +88,97 @@ def intoEGraph(egraph) as DeepFrozen:
             def span := args.last()
             egraph.add([verb] + args.slice(0, args.size() - 1), span)
 
+# Our e-graph analysis is built from a row of join-semilattices:
+# * A source span, if any exist
+# * A constant value, if one is known
+# * A set of names which might occur free
+
+object spanAnalysis as DeepFrozen:
+    to make(_n, span, _egraph):
+        return span
+
+    to join(l, r):
+        return if (l == null) { r } else if (r == null) { l } else {
+            l.combine(r)
+        }
+
+    to modify(eclass, _span):
+        return eclass
+
+
 object unknownValue as DeepFrozen {}
 object constant as DeepFrozen {}
 
 def isConstant(egraph) as DeepFrozen:
     return def isConstantOn(specimen, ej):
-        def [==constant, x] exit ej := egraph.analyze(specimen)
-        return x
+        def [=> constant] | _ := egraph.analyze(specimen)
+        if (constant == unknownValue):
+            throw.eject(ej, "non-constant")
+        return constant
 
 def allConstant(egraph) as DeepFrozen:
+    def pred := isConstant(egraph)
     return def allConstantOn(specimen, ej):
-        def rv := [].diverge()
         def l :List exit ej := specimen
-        for s in (l):
-            def [==constant, x] exit ej := egraph.analyze(s)
-            rv.push(x)
-        return rv.snapshot()
+        return [for s in (l) {
+            def via (pred) x exit ej := s
+            x
+        }]
 
-object monteAnalysis as DeepFrozen:
-    to make(n, span, egraph):
-        def val := switch (n) {
-            match [==leaf, x] { [constant, x] }
-            match [=="Atom", a] { egraph.analyze(a) }
-            match [=="list"] + via (allConstant(egraph)) elts {
-                [constant, elts]
-            }
+object constantValueAnalysis as DeepFrozen:
+    to make(n, _span, egraph):
+        def isConstantOn := isConstant(egraph)
+        def allConstantOn := allConstant(egraph)
+        return switch (n) {
+            match [==leaf, x] { x }
+            match [=="list"] + via (allConstantOn) elts { elts }
             match [=="MethodCallExpr",
-                   via (isConstant(egraph)) target,
-                   via (isConstant(egraph)) verb :Str,
-                   via (isConstant(egraph)) args :List,
-                   via (isConstant(egraph)) _] {
+                   via (isConstantOn) target,
+                   via (isConstantOn) verb :Str,
+                   via (isConstantOn) args :List,
+                   via (isConstantOn) _] {
                 # XXX nargs
-                [constant, M.call(target, verb, args, [].asMap())]
+                M.call(target, verb, args, [].asMap())
             }
             match _ {
                 traceln("um", n)
                 unknownValue
             }
         }
-        return [val, span]
 
-    to join(d1, d2):
-        # Join the spans.
-        def [v1, s1] := d1
-        def [v2, s2] := d2
-        def span := if (s1 == null) { s2 } else if (s2 == null) { s1 } else {
-            s1.combine(s2)
+    to join(l, r):
+        return if (l == unknownValue) { r } else if (r == unknownValue) { l } else {
+            if (l != r) { throw(`constantValueAnalysis.join/2: $l != $r`) }
+            l
         }
-        def val := switch ([v1, v2]) {
-            match [==unknownValue, d] { d }
-            match [d, ==unknownValue] { d }
-            match [[==constant, x], d] {
-                traceln(`Constraint $x : $d`)
-                [constant, x]
-            }
-            match [d, [==constant, x]] {
-                traceln(`Constraint $x : $d`)
-                [constant, x]
-            }
-        }
-        return [val, span]
 
-    to modify(class, d):
-        def [v, _span] := d
-        return if (v =~ [==constant, x]) {
-            class.with([leaf, x])
-        } else { class }
+    to modify(eclass, constant):
+        return if (constant == unknownValue) { eclass } else {
+            eclass.with([leaf, constant])
+        }
+
+
+object makeRowAnalysis as DeepFrozen:
+    "A set of analyses, indexed by name."
+
+    match [=="run", _args, [=> FAIL := null] | na :Map[Str, DeepFrozen]]:
+        object rowAnalysis as DeepFrozen:
+            to make(n, span, egraph):
+                return [for k => analysis in (na) k => analysis.make(n, span, egraph)]
+
+            to join(l, r):
+                return [for k => analysis in (na) k => analysis.join(l[k], r[k])]
+
+            to modify(var eclass, data):
+                for k => analysis in (na):
+                    eclass := analysis.modify(eclass, data[k])
+                return eclass
+
+
+def monteAnalysis :DeepFrozen := makeRowAnalysis(
+    "span" => spanAnalysis,
+    "constant" => constantValueAnalysis,
+)
 
 # Our preference for certain node constructors.
 def exprOrder :List[Str] := [
@@ -168,15 +193,16 @@ def exprOrder :List[Str] := [
 def extractTree(egraph) as DeepFrozen:
     return object extract:
         to constant(eclass :Int):
-            def [[==constant, rv], _span] := egraph.analyze(eclass)
-            return rv
+            def [=> constant] | _ := egraph.analyze(eclass)
+            if (constant == unknownValue) { throw("eclass lacked constant") }
+            return constant
 
         to listOf(extractor, eclass :Int):
             def [_] + args := egraph.extractFiltered(eclass, fn f { f == "list" })
             return [for arg in (args) extractor(arg)]
 
         to patt(eclass :Int):
-            def [_, span] := egraph.analyze(eclass)
+            def [=> span] | _ := egraph.analyze(eclass)
             def [constructor] + args := egraph.extractFiltered(eclass, fn f { f.endsWith("Pattern") })
             return switch (constructor):
                 match =="FinalPattern":
@@ -185,10 +211,10 @@ def extractTree(egraph) as DeepFrozen:
                     monteBuilder.FinalPattern(n, g, span)
 
         to expr(eclass :Int):
-            def [val, span] := egraph.analyze(eclass)
+            def [=> constant, => span] := egraph.analyze(eclass)
             # Look for constants first.
-            return if (val =~ [==constant, x]) {
-                if (x != null) { monteBuilder.LiteralExpr(x, span) }
+            return if (constant != unknownValue) {
+                if (constant != null) { monteBuilder.LiteralExpr(constant, span) }
             } else {
                 def [constructor] + args := egraph.extract(eclass, exprOrder)
                 switch (constructor) {
