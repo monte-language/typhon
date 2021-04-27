@@ -2,8 +2,6 @@
 # import "tests/acceptance" =~ [=> acceptanceSuite]
 import "lib/mim/expand" =~ [=> expand]
 import "lib/mim/audit" =~ [=> holdAuditions]
-import "lib/mim/anf" =~ [=> makeNormal]
-# import "lib/mim/mix" =~ [=> makeMixer]
 exports (go, pretty, evaluate)
 
 object pretty as DeepFrozen:
@@ -92,14 +90,6 @@ object pretty as DeepFrozen:
 def go(expr :DeepFrozen) as DeepFrozen:
     def audited := expand(expr)(holdAuditions)
     return audited
-    # def normalized := makeNormal().alpha(audited)
-    # return normalized
-    # def reductionBasis := [
-    #     => &&true, => &&false, => &&null,
-    #     => &&_makeList,
-    #     => &&Bool, => &&Char, => &&Double, => &&Int, => &&Str,
-    # ]
-    # return makeMixer(anf, reductionBasis).mix(normalized, [].asMap())
 
 def b :DeepFrozen := "&&".add
 
@@ -135,7 +125,7 @@ def evaluate(expr, frame) as DeepFrozen:
                     throw(`List pattern couldn't match ${patterns.size()} patterns against ${l.size()} specimens at $span`)
                 }
                 var f := frame
-                # XXX wrong, but maybe ListPatts are going away in lib/mim/anf?
+                # XXX wrong?
                 for i => p in (patterns) { f := matchBind(p, l[i]) }
                 return f
             }

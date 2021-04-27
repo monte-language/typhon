@@ -1,4 +1,3 @@
-import "lib/mim/anf" =~ [=> makeNormal]
 import "lib/mim/expand" =~ [=> expand]
 import "lib/mim/syntax/cello" =~ ["ASTBuilder" => celloBuilder]
 exports (main)
@@ -167,9 +166,9 @@ def expr :DeepFrozen := m`{
 
 def main(_argv, => stdio) as DeepFrozen:
     def lines := [].diverge(Bytes)
-    def normalized := makeNormal().alpha(expand(expr))
-    traceln(normalized)
-    def rv := compileProgramOnto(normalized, lines)
+    def expanded := expand(expr)
+    traceln(expanded)
+    def rv := compileProgramOnto(expanded, lines)
     def program := buildEntrypoint(lines.reverse(), rv)
     def stdout := stdio.stdout()
     return when (stdout<-(program)) ->
