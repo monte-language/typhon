@@ -17,21 +17,38 @@ or e-classes, over some family of trees. In this particular presentation,
 we'll allow cycles, so that we're storing many different equivalent graphs
 inside a single graph structure.
 
-## E-Matching
+What's the point? Imagine that we have a tree for a program in some language.
+We also have some rewrite rules for the language. We want to reduce the tree
+by repeatedly applying rewrite rules, but we don't want to care about the
+order in which we apply rules. An e-graph solves this problem by collecting
+rewritten tree branches in a holistic and efficient manner. The downside, as
+one might expect, is that we are no longer working with entire trees, but
+fragments of branches; an e-graph is something like a wood chipper.
 
-The bulk of our time will be spent trying to match user-supplied patterns
-against the e-graph. We'll follow the [de Moura-Bjørner abstract
-machine](http://leodemoura.github.io/files/ematching.pdf), with a few
-simplifications.
+An e-class contains branches. A branch is identified by a verb and arity, like
+Monte methods. The arity indicates how many subordinate e-classes are
+referenced by the branch. For lib/asdl trees, each constructor gives a verb
+and arity, and each subordinate branch is associated with its own e-class.
 
 For a variety of sanity reasons, it will be easiest for us to tag all leaf
 nodes with a sentinel value. It will also be easy if this value always
-compares less than non-leaf values.
+compares less than non-leaf values. This will make it simple to tell whether
+an e-class contains concrete data or just pointers to other e-classes.
 
 ```
 def leaf.op__cmp(other) as DeepFrozen:
     return (leaf == other).pick(0, -1)
 ```
+
+Concrete data will have `leaf` as its verb and unary arity.
+
+## E-Matching
+
+The bulk of our time will be spent trying to match user-supplied patterns
+against the e-graph, a process known as "e-matching". We'll follow the [de
+Moura-Bjørner abstract
+machine](http://leodemoura.github.io/files/ematching.pdf), with a few
+simplifications.
 
 We will want to compile our leaf comparisons before our branch comparisons, to
 reduce the amount of backtracking required. To do this, we'll need to be able
@@ -51,7 +68,9 @@ def subpatternsLast(x, y) as DeepFrozen:
     } else { x.op__cmp(y) }
 ```
 
-The actual compiler follows the original design.
+The actual compiler follows the original de Moura-Bjørner design. In the
+future, we could compile many e-match patterns into a single program, as long
+as they all start with the same verb and arity. More on that later.
 
 ```
 # p6
@@ -80,7 +99,9 @@ def compilePattern(pattern) as DeepFrozen:
     return [f, ps.size(), compile([for i => p in (ps) i => p], [].asMap(), ps.size())]
 ```
 
-To run the abstract machine, we'll embed a state machine into an iterator.
+To run the abstract machine, we'll embed a state machine into an iterator. The
+e-graph will set up the state machine, preselecting the verb and arity and
+preloading the registers.
 
 ```
 def makeMatcher(egraph, t, program) as DeepFrozen:
@@ -158,15 +179,30 @@ analysis.
 
 ```
     def data := [].asMap().diverge()
+```
 
+Our canonicalization of e-nodes is almost exactly like the standard one,
+except that `leaf` nodes have special handling for concrete data.
+
+```
     def canonicalize(n):
         def [f] + args := n
         return if (f == leaf) { n } else { [f] + [for a in (args) U.find(a)] }
+```
 
+And we model the e-graph itself as an object closed over all of these
+ingredients.
+
+```
     return object egraph:
         to _printOn(out):
             out.print(`<e-graph, ${U.partitions()} e-classes, ${H.size()} e-nodes>`)
+```
 
+When we add e-nodes, we take an additional seed argument which tweaks
+analyses. In pratice, this is the source span for ASTs.
+
+```
         # p5
         to add(n, seed) :Int:
             "
@@ -270,7 +306,11 @@ invariant maintenance will be turned into an iterative series of batches.
 
                     # Reset the classlist.
                     classlist.clear()
+```
 
+For completeness, we encapsulate the union-find and e-node maps.
+
+```
         to find(a):
             "The canonical representative of e-class `a`."
 
@@ -287,14 +327,27 @@ invariant maintenance will be turned into an iterative series of batches.
             "The associated data from e-graph analysis at e-class `a`."
 
             return data[U.find(a)]
+```
 
+The heavy-duty search functionality starts by filtering e-classes to look up
+all e-nodes with a given verb.
+
+```
         to terms(a, f):
             def rv := [].diverge()
             for c in (eM[U.find(a)]):
                 def [==f] + args exit __continue := c
                 rv.push(args)
             return rv.snapshot()
+```
 
+And here is the final portion of e-matching. Note that we scan each e-class
+for e-nodes with matching verb and arity, but since e-match programs are
+already keyed by verb and arity, we could switch the ordering of these loops:
+For each e-class, for each e-node, look up all of the e-matchers which have
+that e-node's verb and arity, and apply each of them.
+
+```
         to ematch(p):
             def [f, arity, program] := compilePattern(p)
             def rv := [].diverge()
@@ -304,7 +357,14 @@ invariant maintenance will be turned into an iterative series of batches.
                     for m in (makeMatcher(egraph, args, program)):
                         rv.push([c] + m)
             return rv.snapshot()
+```
 
+Finally, extraction methods allow reconstruction of candidate trees from
+within the e-graph's forest of nodes. We'll delegate the actual tree
+construction to callers; here, we're more concerned with ordering each e-class
+so that the lower-cost constructors are preferred.
+
+```
         to extract(a, nodeOrder):
             "
             A representative of e-class `a`.
