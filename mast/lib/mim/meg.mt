@@ -158,7 +158,29 @@ object constantValueAnalysis as DeepFrozen:
         }
 
 
+def sequenceNames(namePairs) as DeepFrozen:
+    "
+    Take many pairs [used, bound] of sets of names and sequence them as if
+    each pair represented an action which uses some names from the current
+    scope and also binds some names into the current scope.
+    "
+
+    return switch (namePairs):
+        match []:
+            [[].asSet(), [].asSet()]
+        match [[var used, var bound]] + tail:
+            for [u, b] in (tail):
+                used |= u &! bound
+                bound |= b
+            [used, bound]
+
 object freeNamesAnalysis as DeepFrozen:
+    "
+    Associate a pair [used, bound] of sets of names to each expression and
+    pattern. The first set contains the names which occur free; the second set
+    contains any names which are bound by match-bind actions.
+    "
+
     to make(n, _span, egraph):
         def asNoun(eclass, ej):
             def [==leaf, n :Str] exit ej := egraph.extractFiltered(eclass, fn f {
@@ -167,35 +189,37 @@ object freeNamesAnalysis as DeepFrozen:
             return n
         def names(eclass, _ej) { return egraph.analyze(eclass)["names"] }
 
-        return switch (n) {
-            match [==leaf, _] { [].asSet() }
+        def rv := switch (n) {
+            match [==leaf, _] { [[].asSet(), [].asSet()] }
             match [=="list"] + tail {
-                var rv := [].asSet()
-                for eclass in (tail) { rv |= names(eclass, null) }
-                rv
+                sequenceNames([for eclass in (tail) names(eclass, null)])
             }
-            match [=="NounExpr", via (asNoun) n] { [n].asSet() }
+            match [=="NounExpr", via (asNoun) n] { [[n].asSet(), [].asSet()] }
             match [=="MethodCallExpr", via (names) receiver, _verb,
                    via (names) args, via (names) namedArgs] {
-                receiver | args | namedArgs
+                sequenceNames([receiver, args, namedArgs])
             }
             match [=="EscapeExpr", via (names) ejPatt, via (names) ejBody,
                    _, _] {
-                # XXX several things wrong
-                ejBody &! ejPatt
+                def [pu, pb] := ejPatt
+                def [bu, bb] := ejBody
+                [bu &! pb | pu, [].asSet()]
             }
             match [=="SeqExpr", via (names) l, via (names) r] {
-                # Still wrong
-                l | r
+                sequenceNames([l, r])
             }
-            match [=="FinalPattern", via (asNoun) n, _] {
-                # XXX also wrong
-                [n].asSet()
+            match [=="FinalPattern", via (asNoun) n, via (names) g] {
+                def [gu, gb] := g
+                [gu, gb.with(n)]
             }
         }
+        traceln("names", n, rv)
+        return rv
 
     to join(l, r):
-        return l | r
+        def [lu, lb] := l
+        def [ru, rb] := r
+        return [lu | ru, lb & rb]
 
     to modify(eclass, _names):
         return eclass
@@ -314,8 +338,8 @@ def isNotFreeIn(nounSlot :Int, exprSlot :Int) as DeepFrozen:
         def [==leaf, n :Str] := egraph.extractFiltered(m[nounSlot], fn f {
             f == leaf
         })
-        def [=> names :Set[Str]] | _ := egraph.analyze(m[exprSlot])
-        return !names.contains(n)
+        def [=> names] | _ := egraph.analyze(m[exprSlot])
+        return !names[0].contains(n)
 
 def rewrite(expr) as DeepFrozen:
     def patts := [
