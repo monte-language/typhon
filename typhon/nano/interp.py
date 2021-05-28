@@ -729,7 +729,7 @@ def scope2env(scope):
     environment = {}
     for k, v in scope.items():
         s = unwrapStr(k)
-        if not s.startswith("&&") or not isinstance(v, Binding):
+        if not s.startswith(u"&&") or not isinstance(v, Binding):
             raise userError(u"scope map must be of the "
                             "form '[\"&&name\" => binding]'")
         environment[s[2:]] = v

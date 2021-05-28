@@ -1,10 +1,13 @@
-{stdenv, fetchzip, fetchFromGitHub, lib, libsodium, libuv, libffi, pkgconfig, pypy, pypyPackages, vmSrc, buildJIT}:
+{stdenv, fetchFromGitLab, fetchFromGitHub, lib, libsodium, libuv, libffi, pkgconfig, pypy, pypyPackages, vmSrc, buildJIT}:
 
-# $ nix-prefetch-hg https://bitbucket.org/pypy/pypy
 let
-  pypySrc = fetchzip {
-    url = "https://downloads.python.org/pypy/pypy2.7-v7.3.1-src.tar.bz2";
-    sha256 = "01bz1s32rz5b57q45d71427m4lslfivxardl05pmrqnw8278453q";
+  # https://foss.heptapod.net/pypy/pypy/
+  pypySrc = fetchFromGitLab {
+    domain = "foss.heptapod.net";
+    owner = "pypy";
+    repo = "pypy";
+    rev = "db9c116a45e8c8f70e0d4625cc30ea4dc7d5cf69";
+    sha256 = "0djzsilpwv8zcxjxdbsq8gjbmvdxlmwx17n13g61j3h60h45m025";
   };
   macropy = pypyPackages.buildPythonPackage rec {
     pname = "macropy";

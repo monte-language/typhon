@@ -15,12 +15,14 @@ let
          (type == "directory" || lib.hasSuffix ".py" p)) ||
       p == loc "/typhon" ||
       p == loc "/main.py") ./..;
-  pypy = nixpkgs.pypy.override { packageOverrides = (s: su: {
-    mock = su.mock.overridePythonAttrs (old: { doCheck = false; });
-    pytest = su.pytest.overridePythonAttrs (old: { doCheck = false; });
-  }); };
+  pypy = nixpkgs.pypy.override {
+    packageOverrides = (s: su: {
+      mock = su.mock.overridePythonAttrs (old: { doCheck = false; });
+      pytest = su.pytest.overridePythonAttrs (old: { doCheck = false; });
+    });
+  };
   vmConfig = {
-    inherit vmSrc pypy ;
+    inherit vmSrc pypy;
     pypyPackages = pypy.pkgs;
     libsodium = libsodium0;
     # Want to build Typhon with Clang instead of GCC? Uncomment this next
