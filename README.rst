@@ -5,6 +5,8 @@ Typhon
 Typhon is a virtual machine for Monte. It loads and executes Kernel-Monte from
 Monte AST files.
 
+Don't panic! We are in ``#monte`` on Libera.
+
 How To Monte
 ============
 
