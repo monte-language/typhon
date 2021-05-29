@@ -3,16 +3,25 @@ import "lib/schwartzian" =~ [=> makeSchwartzian]
 import "lib/welford" =~ [=> makeWelford]
 exports (makeNelderMead)
 
-def makeNelderMead(f, d :(Int >= 2)) as DeepFrozen:
-    "Iteratively minimize `d`-dimensional black-box function `f`."
+def combineVectors(l :List, r :List) :List as DeepFrozen:
+    return [for [x, y] in (zip(l, r)) (x + y) * 0.5]
+
+def reflectVector(l :List, o :List) :List as DeepFrozen:
+    return [for [x, y] in (zip(l, o)) (x * 2.0) - y]
+
+def makeNelderMead(f, d :(Int >= 2), => origin :List[Double] := [0.0] * d,
+                   => epsilon :Double := 1e-15) as DeepFrozen:
+    "
+    Iteratively minimize `d`-dimensional black-box function `f` until the
+    error is less than `epsilon`.
+
+    The `origin` is an overridable starting estimate.
+    "
 
     def call(l):
-        def rv := M.call(f, "run", l, [].asMap())
-        traceln("call", l, "->", rv)
-        return rv
+        return M.call(f, "run", l, [].asMap())
 
     def sorter := makeSchwartzian.fromKeyFunction(call)
-    def zero := [0.0] * d
 
     def done(xs):
         def stats := makeWelford()
@@ -21,7 +30,7 @@ def makeNelderMead(f, d :(Int >= 2)) as DeepFrozen:
         return stats.standardDeviation() < 1e-7
 
     return def nelderMead._makeIterator():
-        var xs := [zero] + [for i in (0..!d) zero.with(i, 1.0)]
+        var xs := [origin] + [for i in (0..!d) origin.with(i, 1.0)]
         var j := 0
         def finish(l):
             xs with= (xs.size() - 1, l)
@@ -35,6 +44,10 @@ def makeNelderMead(f, d :(Int >= 2)) as DeepFrozen:
                 throw.eject(ej, "end of iteration")
             # Order
             xs := sorter.sort(xs)
+            def best := xs[0]
+            def cb := call(best)
+            if (cb < epsilon):
+                throw.eject(ej, "end of iteration")
             # Centroid
             def centroid := [for column in (M.call(zip, "run", xs, [].asMap())) {
                 var mean := 0.0
@@ -42,22 +55,21 @@ def makeNelderMead(f, d :(Int >= 2)) as DeepFrozen:
                 mean / column.size()
             }]
             # Reflection
-            def best := xs[0]
             def worst := xs.last()
-            def reflected := [for i => c in (centroid) c * 2.0 - worst[i]]
+            def reflected := reflectVector(centroid, worst)
             def cr := call(reflected)
             if (cr < call(xs[xs.size() - 2])):
-                if (cr >= call(xs[0])):
-                    return finish(reflected)
-                # Expansion
-                def expanded := [for i => r in (reflected) r * 2.0 - centroid[i]]
-                return finish((call(expanded) < cr).pick(expanded, reflected))
+                return if (cr >= cb) { finish(reflected) } else {
+                    # Expansion
+                    def expanded := reflectVector(reflected, centroid)
+                    finish((call(expanded) < cr).pick(expanded, reflected))
+                }
             # Contraction
-            def contracted := [for i => c in (centroid) (c + worst[i]) * 0.5]
+            def contracted := combineVectors(centroid, worst)
             if (call(contracted) < call(worst)):
                 return finish(contracted)
             # Shrink
-            xs := [for x in (xs) [for i => c in (best) (c + x[i]) * 0.5]]
+            xs := [for x in (xs) combineVectors(best, x)]
             def rv := [j, best]
             j += 1
             return rv
