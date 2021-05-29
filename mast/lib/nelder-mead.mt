@@ -30,7 +30,7 @@ def makeNelderMead(f, d :(Int >= 2), => origin :List[Double] := [0.0] * d,
         return stats.standardDeviation() < 1e-7
 
     return def nelderMead._makeIterator():
-        var xs := [origin] + [for i in (0..!d) origin.with(i, 1.0)]
+        var xs := [origin] + [for i => o in (origin) origin.with(i, o + 1.0)]
         var j := 0
         def finish(l):
             xs with= (xs.size() - 1, l)

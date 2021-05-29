@@ -31,6 +31,12 @@ def update(curl) as DeepFrozen:
             rv.extend(temp.sortKeys().getValues())
         rv.snapshot()
 
+def max(l :List) as DeepFrozen:
+    def [var rv] + tail := l
+    for t in (tail):
+        rv max= (t)
+    return rv
+
 def main(_argv, => currentProcess, => makeFileResource, => makeProcess,
          => Timer) as DeepFrozen:
     def paths := currentProcess.getEnvironment()[b`PATH`]
@@ -46,13 +52,12 @@ def main(_argv, => currentProcess, => makeFileResource, => makeProcess,
     # Restriction fused -> sensor: project 1
     var fused := [20.0, 50.0]
     var outside := 20.0
-    var sensors := [50.0] * 3
+    var sensors := [50.0] * 4
 
     def consistencyRadius(fusedOutside, fusedSensor):
         var cr := (fusedOutside - outside).abs()
-        for sensor in (sensors):
-            def distSensor := (fusedSensor - sensor).abs()
-            cr max= (distSensor)
+        for i => sensor in (sensors):
+            cr max= ((fusedSensor - sensor).abs())
         return cr
 
     def go():
@@ -63,12 +68,12 @@ def main(_argv, => currentProcess, => makeFileResource, => makeProcess,
                 # Improve the sheaf's fused values.
                 for i => xs in (makeNelderMead(consistencyRadius, 2, "origin" => fused)):
                     fused := xs
-                    if (i > 50):
+                    if (i > 100):
                         break
                 traceln("outside", outside)
                 traceln("sensors", sensors)
                 traceln("fused", fused)
-                traceln("CR", consistencyRadius(fused[0], fused[1]))
+                traceln("CR", M.call(consistencyRadius, "run", fused, [].asMap()))
                 go<-()
 
     return when (go<-()) ->
