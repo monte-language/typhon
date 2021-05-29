@@ -6,8 +6,6 @@ exports (main)
 
 # https://arxiv.org/abs/1603.01446
 
-def url :Bytes := b`http://192.168.1.5:9100/metrics`
-
 def parseProm(s :Str) :Map[Str, Double] as DeepFrozen:
     def rv := [].asMap().diverge(Str, Double)
     for line in (s.split(`$\n`)):
@@ -22,14 +20,15 @@ def fetchPromKeys(head :Str, m :Map[Str, Double]) :Map[Str, Double] as DeepFroze
             rv[tags] := v
     return rv.snapshot()
 
-def update(curl) as DeepFrozen:
-    return when (def bs := getURL(curl, url)) ->
-        def fullKeys := parseProm(UTF8.decode(bs, null))
-        def rv := [].diverge()
-        for k in (["node_thermal_zone_temp", "node_hwmon_temp_celsius"]):
-            def temp := fetchPromKeys(k, fullKeys)
-            rv.extend(temp.sortKeys().getValues())
-        rv.snapshot()
+def makeProm(curl, url :Bytes) as DeepFrozen:
+    return def getTemperatures():
+        return when (def bs := getURL(curl, url)) ->
+            def fullKeys := parseProm(UTF8.decode(bs, null))
+            def rv := [].diverge()
+            for k in (["node_thermal_zone_temp", "node_hwmon_temp_celsius"]):
+                def temp := fetchPromKeys(k, fullKeys)
+                rv.extend(temp.sortKeys().getValues())
+            rv.snapshot()
 
 def max(l :List) as DeepFrozen:
     def [var rv] + tail := l
@@ -44,34 +43,40 @@ def main(_argv, => currentProcess, => makeFileResource, => makeProcess,
     def which := makeWhich(makeProcess, searcher)
     def curl := which("curl")
 
+    def myProm := makeProm(curl, b`http://192.168.1.5:9100/metrics`)
+    def theirProm := makeProm(curl, b`http://192.168.1.22:9100/metrics`)
+
     # Sheaf:
-    # fused: { O, W₀ }: R²
+    # fused: { O, W₀, W₁ }: R³
     # outside: { O } : R
     # sensor: { T₀ } : R
     # Restriction fused -> outside: project 0
     # Restriction fused -> sensor: project 1
-    var fused := [20.0, 50.0]
+    var fused := [20.0, 50.0, 50.0]
     var outside := 20.0
-    var sensors := [50.0] * 4
+    var mySensors := [50.0] * 4
+    var theirSensors := [50.0] * 3
 
-    def consistencyRadius(fusedOutside, fusedSensor):
+    def consistencyRadius(fusedOutside, fusedMine, fusedTheirs):
         var cr := (fusedOutside - outside).abs()
-        for i => sensor in (sensors):
-            cr max= ((fusedSensor - sensor).abs())
+        for sensor in (mySensors):
+            cr max= ((fusedMine - sensor).abs())
+        for sensor in (theirSensors):
+            cr max= ((fusedTheirs - sensor).abs())
         return cr
 
     def go():
         when (Timer.fromNow(5.0)) ->
-            def ds := update(curl)
-            when (ds) ->
-                sensors := ds
+            mySensors := myProm()
+            theirSensors := theirProm()
+            when (mySensors, theirSensors) ->
                 # Improve the sheaf's fused values.
-                for i => xs in (makeNelderMead(consistencyRadius, 2, "origin" => fused)):
+                for i => xs in (makeNelderMead(consistencyRadius, 3, "origin" => fused)):
                     fused := xs
                     if (i > 100):
                         break
                 traceln("outside", outside)
-                traceln("sensors", sensors)
+                traceln("sensors", mySensors, theirSensors)
                 traceln("fused", fused)
                 traceln("CR", M.call(consistencyRadius, "run", fused, [].asMap()))
                 go<-()
