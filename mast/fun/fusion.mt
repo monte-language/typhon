@@ -1,6 +1,6 @@
 import "lib/curl" =~ [=> getURL]
 import "lib/codec/utf8" =~ [=> UTF8]
-import "lib/nelder-mead" =~ [=> makeNelderMead]
+import "lib/compass" =~ [=> compassSearch]
 import "lib/which" =~ [=> makePathSearcher, => makeWhich]
 exports (main)
 
@@ -71,10 +71,7 @@ def main(_argv, => currentProcess, => makeFileResource, => makeProcess,
             theirSensors := theirProm()
             when (mySensors, theirSensors) ->
                 # Improve the sheaf's fused values.
-                for i => xs in (makeNelderMead(consistencyRadius, 3, "origin" => fused)):
-                    fused := xs
-                    if (i > 100):
-                        break
+                fused := compassSearch(consistencyRadius, fused)
                 traceln("outside", outside)
                 traceln("sensors", mySensors, theirSensors)
                 traceln("fused", fused)

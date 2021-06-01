@@ -39,7 +39,6 @@ def compassSearch(f, row :List[Double],
                 k *= 2.0
             rv := d
             best := cd
-            traceln("better", rv, best, "gallop", gallop)
             cont()
 
     while (k >= epsilon):
@@ -49,5 +48,4 @@ def compassSearch(f, row :List[Double],
             consider(rv.with(i, x - k), cont)
         gallop := 0
         k *= 0.5
-        traceln("k", k)
     return rv
