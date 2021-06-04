@@ -240,10 +240,16 @@ invariant maintenance will be turned into an iterative series of batches.
 
 ```
         # p8
-        to mergePairs(pairs):
+        to mergePairs(pairs :List) :Bool:
+            "
+            Merge many `pairs` in a single motion.
+
+            Return whether any e-classes were merged.
+            "
             # Worklist is broken into two pieces:
             # * mergelist: next batch of pairs to merge
             # * classlist: next batch of e-classes to rebuild
+            var rv := false
             def mergelist := pairs.asSet().diverge()
             while (!mergelist.isEmpty()):
                 # merge()
@@ -253,6 +259,7 @@ invariant maintenance will be turned into an iterative series of batches.
                     def ra := U.find(a)
                     def rb := U.find(b)
                     if (ra != rb):
+                        rv := true
                         classlist.include(ra)
                         U.union(ra, rb)
                         parents[ra] := parents[rb] := (
@@ -306,6 +313,7 @@ invariant maintenance will be turned into an iterative series of batches.
 
                     # Reset the classlist.
                     classlist.clear()
+            return rv
 ```
 
 For completeness, we encapsulate the union-find and e-node maps.
@@ -380,8 +388,10 @@ so that the lower-cost constructors are preferred.
                     nodeKeys.fetch(f, fn { Infinity })
                 }
             })
+            # Only non-cyclic nodes are candidates.
+            def candidates := [for n in (eM[U.find(a)]) ? (!n.contains(a)) n]
 
-            return schwartzian.sort(eM[U.find(a)].asList())[0]
+            return schwartzian.sort(candidates)[0]
 
         to extractFiltered(a, pred):
             "
