@@ -17,6 +17,10 @@ object sizeAnalysis as DeepFrozen:
     to modify(eclass, _span):
         return eclass
 
+def just(i :Int) as DeepFrozen:
+    return def justOne(m, _eg) as DeepFrozen:
+        return m[i]
+
 def simplifyExpression(tree) as DeepFrozen:
     def patterns := [
         # Categories.
@@ -26,11 +30,13 @@ def simplifyExpression(tree) as DeepFrozen:
         ["comp", 1, ["comp", 2, 3]] => fn m, eg {
             eg.add(["comp", eg.add(["comp", m[1], m[2]], null), m[3]], null)
         },
-        ["comp", ["id"], 1] => fn m, _ { m[1] },
-        ["comp", 1, ["id"]] => fn m, _ { m[1] },
+        ["comp", ["id"], 1] => just(1),
+        ["comp", 1, ["id"]] => just(1),
         # Monoidal categories.
-        ["comp", ["prod", 1, 2], ["exl"]] => fn m, _ { m[1] },
-        ["comp", ["prod", 1, 2], ["exr"]] => fn m, _ { m[2] },
+        ["comp", ["prod", 1, 2], ["exl"]] => just(1),
+        ["comp", ["prod", 1, 2], ["exr"]] => just(2),
+        # Cartesian closed categories.
+        ["comp", ["prod", ["comp", ["exl"], ["cur", 1]], ["exr"]], ["ev"]] => just(1),
     ]
     def eg := makeEGraph(sizeAnalysis)
     def add(branch):
