@@ -6,20 +6,26 @@ arbitrary category without being forced to choose a locale ahead of time. We
 will implement a hopefully-boring syntax which designates arrows within
 arbitrary categories.
 
-For verbs, we will look at and compare [Hagino
-1987](https://arxiv.org/abs/2010.05167), [Von Thun
-2001](http://www.kevinalbrecht.com/code/joy-mirror/joy.html), [Kerby
-2002](http://tunes.org/~iepos/joy.html), [Elliott
-2017](http://conal.net/papers/compiling-to-categories/compiling-to-categories.pdf),
-and [Patterson 2017](https://arxiv.org/abs/1706.00526).
+For verbs, we will look at and compare several sources:
+
+* Constructors, natural transformations, and factorizers from [Hagino
+  1987](https://arxiv.org/abs/2010.05167)
+* Words from [Von Thun
+  2001](http://www.kevinalbrecht.com/code/joy-mirror/joy.html)
+* Combinators from [Kerby 2002](http://tunes.org/~iepos/joy.html)
+* Combinators and notation from [Baez & Stay
+  2009](https://math.ucr.edu/home/baez/rosetta.pdf)
+* Methods from [Elliott
+  2017](http://conal.net/papers/compiling-to-categories/compiling-to-categories.pdf)
+* Notation from [Patterson 2017](https://arxiv.org/abs/1706.00526)
 
 ## Categories
 
 All categories have identity arrows and the ability to compose arrows.
 
-| Hagino | Von Thun | Kerby | Elliott | Patterson |
-|--------|----------|-------|---------|-----------|
-|        | id       |       | id      | 1         |
+| Hagino | Von Thun | Kerby | Baez & Stay | Elliott | Patterson |
+|--------|----------|-------|-------------|---------|-----------|
+|        | id       |       | id          | id      | 1         |
 
 Composition is usually implicitly built from one-dimensional sequences in
 syntax, and we will continue that tradition.
@@ -29,9 +35,9 @@ syntax, and we will continue that tradition.
 A [terminal object](https://ncatlab.org/nlab/show/terminal%20object) is a
 common categorical feature. They often show up as monoidal units.
 
-| Hagino | Von Thun | Kerby | Elliott | Patterson |
-|--------|----------|-------|---------|-----------|
-| !      | drop     | zap   | it      | I         |
+| Hagino | Von Thun | Kerby | Baez & Stay | Elliott | Patterson |
+|--------|----------|-------|-------------|---------|-----------|
+| !      | drop     | zap   | !           | it      | I         |
 
 Initial objects are also a thing in some categories.
 
@@ -42,22 +48,21 @@ Initial objects are also a thing in some categories.
 ## Products & Coproducts
 
 Categorical products on their own are quite limited. The only universal arrows
-are the projections and the pairing. Note that some authors are talking about
-monoidal products, depending on how the chosen categories are closed.
+are the projections and the pairing.
 
-| Hagino | Von Thun | Kerby | Elliott | Patterson |
-|--------|----------|-------|---------|-----------|
-| pi1    | pop      |       | exl     |           |
-| pi2    | popd     |       | exr     |           |
-| pair   |          |       | △       |           |
+| Hagino | Von Thun | Kerby | Baez & Stay | Elliott | Patterson |
+|--------|----------|-------|-------------|---------|-----------|
+| pi1    | pop      |       | p           | exl     |           |
+| pi2    | popd     |       | p'          | exr     |           |
+| pair   |          |       |             | △       |           |
 
 However, some authors also include a tensoring operation which takes two
 arrows and returns an arrow on their products. That is, given f : X → Y and
 g : Z → W, their tensor has type X × Z → Y × W.
 
-| Hagino | Von Thun | Kerby | Elliott | Patterson |
-|--------|----------|-------|---------|-----------|
-| prod   |          |       |         | ⊗         |
+| Hagino | Von Thun | Kerby | Baez & Stay | Elliott | Patterson |
+|--------|----------|-------|-------------|---------|-----------|
+| prod   |          |       | ⊗           |         | ⊗         |
 
 Dually, coproducts only have injections.
 
@@ -66,6 +71,22 @@ Dually, coproducts only have injections.
 | in1    |          |       |         |           |
 | in2    |          |       |         |           |
 | case   |          |       |         |           |
+
+## Monoidal Categories
+
+A monoidal category has a unit object and a tensor-like product. Any category
+with finite products (products and a terminal object) can be interpreted as a
+monoidal category.
+
+Many categories need an associator of some sort, an isomorphism
+(X ⊗ Y) ⊗ Z → X ⊗ (Y ⊗ Z). They also have left and right unitors, isomorphisms
+1 ⊗ X → X and X ⊗ 1 → X.
+
+| Hagino | Von Thun | Kerby | Baez & Stay | Elliott | Patterson |
+|--------|----------|-------|-------------|---------|-----------|
+|        |          |       | assoc       |         |           |
+|        |          |       | left        |         |           |
+|        |          |       | right       |         |           |
 
 ## Lists
 
@@ -82,32 +103,48 @@ list into a single value.
 
 ## Braided & Symmetric Monoidal Categories
 
-A [symmetric monoidal
-category](https://ncatlab.org/nlab/show/symmetric+monoidal+category) allows us
-to swap the order of products back and forth. A braided monoidal category also
-has swaps, but two swaps isn't necessarily identity.
+A braided monoidal category allows us
+to swap the order of products back and forth with the braiding isomorphism
+X ⊗ Y → Y ⊗ X. A [symmetric monoidal
+category](https://ncatlab.org/nlab/show/symmetric+monoidal+category) requires
+the braiding to be its own inverse.
 
-| Hagino | Von Thun | Kerby | Elliott | Patterson |
-|--------|----------|-------|---------|-----------|
-|        | swap     | swap  |         | σ         |
+| Hagino | Von Thun | Kerby | Baez & Stay | Elliott | Patterson |
+|--------|----------|-------|-------------|---------|-----------|
+|        | swap     | swap  | braid       |         | σ         |
 
 ## Dual Objects & Dagger Categories
 
-| Hagino | Von Thun | Kerby | Elliott | Patterson |
-|--------|----------|-------|---------|-----------|
-|        |          |       |         | *         |
-|        |          |       |         | †         |
+On the way to compact closed categories, we must define dual objects. In
+addition, for dagger categories, we must provide a dagger on arrows.
+
+| Hagino | Von Thun | Kerby | Baez & Stay | Elliott | Patterson |
+|--------|----------|-------|-------------|---------|-----------|
+|        |          |       | *           |         | *         |
+|        |          |       | †           |         | †         |
 
 ## Cartesian Monoidal Categories
 
 A [Cartesian monoidal
 category](https://ncatlab.org/nlab/show/cartesian+monoidal+category) has the
 same construction for its monoidal and categorical product. This induces a
-diagonal arrow, and also allows building products.
+diagonal arrow.
 
-| Hagino | Von Thun | Kerby | Elliott | Patterson |
-|--------|----------|-------|---------|-----------|
-|        | dup      | dup   |         | ∆         |
+| Hagino | Von Thun | Kerby | Baez & Stay | Elliott | Patterson |
+|--------|----------|-------|-------------|---------|-----------|
+|        | dup      | dup   | ∆           |         | ∆         |
+
+## Closed Monoidal Categories
+
+A closed monoidal category has internal homs, enabling currying and
+uncurrying. Additionally, there is an application arrow, which is merely an
+uncurried identity arrow.
+
+| Hagino | Von Thun | Kerby | Baez & Stay | Elliott | Patterson |
+|--------|----------|-------|-------------|---------|-----------|
+| curry  |          |       | ~           | curry   |           |
+|        |          |       |             | uncurry |           |
+| eval   | b        |       | eval        | apply   |           |
 
 ## Compact Closed Categories
 
@@ -116,27 +153,10 @@ object, there is a pair of arrows which relate it to both its dual object and
 also the monoidal unit. Confusingly, these arrows are called the unit and
 counit.
 
-| Hagino | Von Thun | Kerby | Elliott | Patterson |
-|--------|----------|-------|---------|-----------|
-|        |          |       |         | I         |
-|        |          |       |         | η         |
-|        |          |       |         | ε         |
-
-## Cartesian Closed Categories
-
-A Cartesian closed category has internal homs based on the diagonal arrow.
-This includes currying and uncurrying, as well as the application arrow, which
-is merely an uncurried identity arrow.
-
-Note that the internal homs of Cartesian closed categories are necessarily
-[exponential objects](https://ncatlab.org/nlab/show/exponential%20object);
-this fact is required to correctly read some surveyed papers.
-
-| Hagino | Von Thun | Kerby | Elliott | Patterson |
-|--------|----------|-------|---------|-----------|
-| eval   | b        |       | apply   |           |
-| curry  |          |       | curry   |           |
-|        |          |       | uncurry |           |
+| Hagino | Von Thun | Kerby | Baez & Stay | Elliott | Patterson |
+|--------|----------|-------|-------------|---------|-----------|
+|        |          |       | i           |         | η         |
+|        |          |       | e           |         | ε         |
 
 ## Epi-Mono Factorization
 
