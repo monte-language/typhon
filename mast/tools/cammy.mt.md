@@ -26,8 +26,11 @@ def makeBytecodeWriter() as DeepFrozen:
     return object bytecodeWriter:
         to freshLabel():
             def insts := [].diverge(0..255)
+            def index := labels.size()
             labels.push(insts)
             return object codeMachine:
+                to index():
+                    return index
                 to nop():
                     insts.push(0)
                 to clear():
@@ -35,6 +38,9 @@ def makeBytecodeWriter() as DeepFrozen:
                     while (!insts.isEmpty() && noStackEffect.contains(insts.last())):
                         insts.pop()
                     insts.push(1)
+                to cur(i):
+                    insts.push(7)
+                    insts.push(i)
 
         to export():
             return b``.join([for label in (labels) _makeBytes.fromInts(label)])
@@ -59,6 +65,9 @@ def compileTop(expr) as DeepFrozen:
                 compile(g, label)
             match [=="!"]:
                 label.clear()
+            match [=="curry", f]:
+                def fresh := writer.freshLabel()
+                label.cur(fresh.index())
     compile(expr, writer.freshLabel())
     return writer.export()
 ```
