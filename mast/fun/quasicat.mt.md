@@ -111,7 +111,7 @@ The lone rule for terminal objects implements the universal property: There's
 only one terminal arrow, regardless of input type.
 
 ```
-def terminalCategoryRules :DeepFrozen := [
+def terminalRules :DeepFrozen := [
     ["comp", 1, ["!"]] => ["!"],
 ]
 ```
@@ -136,6 +136,17 @@ are the projections and the pairing.
 | Fst    | pi1    | pop      | k     | p           | exl     |           |
 | Snd    | pi2    | popd     | z     | p'          | exr     |           |
 | <,>    | pair   |          | c     |             | △       |           |
+
+Our rules eliminate unneeded work on either side of a product. This is
+a fundamentally lazy evaluation, based on the idea that lazy evaluation has
+products while eager evaluation has coproducts.
+
+```
+def productRules :DeepFrozen := [
+    ["comp", ["pair", [1, 2]], ["exl"]] => 1,
+    ["comp", ["pair", [1, 2]], ["exr"]] => 2,
+]
+```
 
 However, some authors also include a tensoring operation which takes two
 arrows and returns an arrow on their products. That is, given f : X → Y and
@@ -194,6 +205,12 @@ the braiding to be its own inverse.
 |--------|----------|-------|-------------|---------|-----------|
 |        | swap     | swap  | braid       |         | σ         |
 
+```
+def symmetricRules :DeepFrozen := [
+    ["comp", ["pair", 1, 2], ["swap"]] => ["pair", 2, 1]
+]
+```
+
 ### Dual Objects & Dagger Categories
 
 On the way to compact closed categories, we must define dual objects. In
@@ -226,6 +243,14 @@ uncurried identity arrow.
 | Λ      | curry  |          |       | ~           | curry   |           |
 |        |        |          |       |             | uncurry |           |
 | App    | eval   | b        |       | eval        | apply   |           |
+
+```
+def closedRules :DeepFrozen := [
+    ["uncurry", ["id"]] => ["apply"],
+    ["uncurry", ["curry", 1]] => 1,
+    ["curry", ["uncurry", 1]] => 1,
+]
+```
 
 ### Compact Closed Categories
 
