@@ -157,10 +157,13 @@ def makeKanren() as DeepFrozen:
     def [varSealer, varUnsealer] := makeBrandPair("logic variable")
     def varb := varUnsealer.unsealing
 
-    def walkOn(s :Map, v):
+    def walkOn(s :Map, v, => occurs :List[Int] := []):
         return switch (v) {
-            match via (varb) via (s.fetch) x { walkOn(s, x) }
-            match us :List { [for u in (us) walkOn(s, u)] }
+            match via (varb) k ? (!occurs.contains(k)) {
+                walkOn(s, s.fetch(k, fn { return v }),
+                       "occurs" => occurs.with(k))
+            }
+            match us :List { [for u in (us) walkOn(s, u, => occurs)] }
             match _ { v }
         }
 
