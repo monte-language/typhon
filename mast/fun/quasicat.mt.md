@@ -1,5 +1,6 @@
 ```
-exports ()
+import "lib/logji" =~ [=> logic, => makeKanren, => Katren]
+exports (interpret, inferTypes)
 ```
 
 # QuasiCat
@@ -291,3 +292,79 @@ primitive recursion.
 | Hagino | Von Thun | Kerby | Elliott | Patterson |
 |--------|----------|-------|---------|-----------|
 |        |          |       |         |           |
+
+## Evaluation of ASTs
+
+```
+def runExpression(expr, interp) as DeepFrozen:
+    def [f] + args := expr
+    return M.call(interp, f, [for arg in (args) runExpression(arg, interp)],
+                  [].asMap())
+```
+
+## Serialization
+
+We define a basic output format which should be homomorphic with what our
+parser currently accepts.
+
+```
+object serializeExpression as DeepFrozen:
+    match [verb, args, _]:
+        `$verb(${", ".join(args)})`
+```
+
+## Interpreter
+
+```
+object interpret as DeepFrozen:
+    to id():
+        return fn x { x }
+
+    to pair(f, g):
+        return fn x { [f(x), g(x)] }
+
+    to exl():
+        return fn [x, _] { x }
+
+    to exr():
+        return fn [_, x] { x }
+
+    to zero():
+        return fn _ { 0 }
+
+    to succ():
+        return fn x { x + 1 }
+
+    to pr(e, f):
+        return fn x {
+            var rv := e(null)
+            for _ in (0..!x) { rv := f(rv) }
+            rv
+        }
+```
+
+## Typechecker
+
+```
+def assertType(ty :Str) as DeepFrozen:
+    return fn k, u { logic (k.unify(u, ty)) map k2 { [k2, u] } }
+
+object typeGoal as DeepFrozen:
+    to id():
+        return Katren.merge()
+
+    to zero():
+        def l := Katren.compose(Katren.exl(), assertType("1"))
+        def r := Katren.compose(Katren.exr(), assertType("nat"))
+        return Katren.prod(l, r)
+
+def inferTypes(expr) as DeepFrozen:
+    def goal := runExpression(expr, typeGoal)
+    def [k, x, y] := makeKanren().fresh(2)
+    for [context, _] in (logic.makeIterable(goal(k, [x, y]))):
+        def wx := context.walk(x)
+        def wy := context.walk(y)
+        def input := if (wx == x) { "X" } else { wx }
+        def output := if (wy == y) { "Y" } else { wy }
+        traceln("input", input, "output", output)
+```
