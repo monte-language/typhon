@@ -6,8 +6,9 @@ let
     domain = "foss.heptapod.net";
     owner = "pypy";
     repo = "pypy";
-    rev = "db9c116a45e8c8f70e0d4625cc30ea4dc7d5cf69";
-    sha256 = "0djzsilpwv8zcxjxdbsq8gjbmvdxlmwx17n13g61j3h60h45m025";
+    # release candidate from branch release-pypy3.8-v7.x
+    rev = "90fd9ed34d52181de59cbfff863719472b05418e";
+    sha256 = "03cshgvh8qcsyac4q4vf0sbvcm1m2ikgwycwip4cc7sw9pzpw6a3";
   };
   macropy = pypyPackages.buildPythonPackage rec {
     pname = "macropy";
@@ -29,7 +30,7 @@ stdenv.mkDerivation {
   src = vmSrc;
 
   buildInputs = [ pypy
-                  pypyPackages.py pypyPackages.twisted pypyPackages.pytest
+                  pypyPackages.py pypyPackages.pytest
                   macropy pypySrc
                   pkgconfig libffi libuv libsodium ];
   propagatedBuildInputs = [ libffi libuv libsodium ];
@@ -56,16 +57,9 @@ stdenv.mkDerivation {
     cp -r ${pypySrc}/rpython .
     chmod -R u+w rpython/
     cp -r $src/main.py .
-    # Run the tests.
-    trial typhon
     # Do the actual translation.
     ${pypy}/bin/pypy -mrpython ${optLevel} main.py
     '';
-
-  # We do still have the check phase, but we do the untranslated test before
-  # we attempt translation.
-  doCheck = false;
-  checkPhase = "trial typhon";
 
   installPhase = ''
     mkdir $out

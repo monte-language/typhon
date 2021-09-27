@@ -48,7 +48,7 @@ setup_build_env() {
     virtualenv -p $PYTHONEXEC venv/ && . venv/bin/activate
 
     # Install deps
-    pip install -U pytest twisted
+    pip install -U pytest
 
     # Grab and extract rpython
     if [ ! -f $PYPY_FILE ]

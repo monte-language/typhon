@@ -2,8 +2,8 @@
 let
   nixball = builtins.fetchTarball {
     name = "typhon-pinned-nixpkgs";
-    url = https://github.com/NixOS/nixpkgs/archive/ab5863afada3c1b50fc43bf774b75ea71b287cde.tar.gz;
-    sha256 = "1iv5xmklasnv3cyhz4nbjd49kgyxcmg815p0ab817fy49nn8js7f";
+    url = https://github.com/NixOS/nixpkgs/archive/a3a23d9599b0a82e333ad91db2cdc479313ce154.tar.gz;
+    sha256 = "05xmgrrnw6j39lh3d48kg064z510i0w5vvrm1s5cdwhdc2fkspjq";
   };
   nixpkgs = import nixball { inherit system; };
   lib = nixpkgs.lib;

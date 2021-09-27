@@ -12,6 +12,16 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+# Monkey-patch the stdlib.
+from ctypes import util
+fl = util.find_library
+def patched_find_library(name):
+    if name == "c":
+        return "libc.so.6"
+    else:
+        return fl(name)
+util.find_library = patched_find_library
+
 import sys
 
 # Abandon all hope, ye whose entrypoint is here.

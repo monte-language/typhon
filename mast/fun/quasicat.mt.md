@@ -208,7 +208,7 @@ the braiding to be its own inverse.
 
 ```
 def symmetricRules :DeepFrozen := [
-    ["comp", ["pair", 1, 2], ["swap"]] => ["pair", 2, 1]
+    ["comp", ["pair", 0, 2], ["swap"]] => ["pair", 2, 1]
 ]
 ```
 

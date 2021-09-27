@@ -10,7 +10,7 @@ let
 in
 stdenv.mkDerivation {
   name = "typhon-dump-mast";
-  buildInputs = [ python27 python27Packages.pytest python27Packages.twisted pypySrc
+  buildInputs = [ python27 python27Packages.pytest pypySrc
                   pkgconfig libffi afl ];
   buildPhase = ''
     source $stdenv/setup
