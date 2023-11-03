@@ -4,7 +4,7 @@
 # $ nix-prefetch-hg https://bitbucket.org/pypy/pypy
 let
   pypySrc = fetchzip {
-    url = "https://bitbucket.org/pypy/pypy/downloads/pypy2-v5.6.0-src.tar.bz2";
+    url = "https://foss.heptapod.net/pypy/pypy/-/archive/release-pypy2.7-v5.6.0/pypy-release-pypy2.7-v5.6.0.tar.bz2";
     sha256 = "1i4cjyl3wpb2dfg7dhi5vrv474skym90mn7flm696cqs4jl4s421";
   };
 in

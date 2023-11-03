@@ -3,7 +3,7 @@ pkgs.stdenv.mkDerivation {
   name = "mast-capnproto";
 
   srcs = [ pkgs.capnproto.src ../mast/capn ];
-  sourceRoot = "capnproto-c++-0.7.0/src";
+  sourceRoot = "capnproto-c++-0.9.0/src";
 
   # XXX hack: Compile our value schema specially; it's the only Capn schema
   # that we ship, and this is the best time to build it.
