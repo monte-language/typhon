@@ -1,4 +1,5 @@
-{stdenv, fetchFromGitLab, fetchFromGitHub, lib, libsodium, libuv, libffi, pkgconfig, pypy, pypyPackages, vmSrc, buildJIT}:
+{stdenv, fetchFromGitLab, fetchFromGitHub, lib, libsodium, libuv, libffi,
+pkg-config, pypy, pypyPackages, vmSrc, buildJIT}:
 
 let
   # https://foss.heptapod.net/pypy/pypy/
@@ -32,7 +33,7 @@ stdenv.mkDerivation {
   buildInputs = [ pypy
                   pypyPackages.py pypyPackages.pytest
                   macropy pypySrc
-                  pkgconfig libffi libuv libsodium ];
+                  pkg-config libffi libuv libsodium ];
   propagatedBuildInputs = [ libffi libuv libsodium ];
 
   shellHook = ''

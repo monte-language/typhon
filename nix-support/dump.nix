@@ -1,4 +1,4 @@
-{stdenv, fetchzip, lib, libuv, libffi, pkgconfig, python27, python27Packages,
+{stdenv, fetchzip, lib, libuv, libffi, pkg-config, python27, python27Packages,
  afl}:
 
 # $ nix-prefetch-hg https://bitbucket.org/pypy/pypy
@@ -11,7 +11,7 @@ in
 stdenv.mkDerivation {
   name = "typhon-dump-mast";
   buildInputs = [ python27 python27Packages.pytest pypySrc
-                  pkgconfig libffi afl ];
+                  pkg-config libffi afl ];
   buildPhase = ''
     source $stdenv/setup
     mkdir -p ./rpython/_cache
