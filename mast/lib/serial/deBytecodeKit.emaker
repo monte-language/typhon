@@ -1,0 +1,215 @@
+#!/usr/bin/env rune
+
+# Copyright 2002 Combex, Inc. under the terms of the MIT X license
+# found at http://www.opensource.org/licenses/mit-license.html ................
+
+def DEBuilderOf := <elib:serial.DEBuilderOf>
+
+def DataOutput := <type:java.io.DataOutput>
+def makeDataOutputStream := <import:java.io.DataOutputStream>
+def makeByteArrayOutputStream := <import:java.io.ByteArrayOutputStream>
+
+def DataInput := <type:java.io.DataInput>
+def makeDataInputStream := <import:java.io.DataInputStream>
+def makeByteArrayInputStream := <import:java.io.ByteArrayInputStream>
+
+def byte := <import:java.lang.Byte>.getTYPE()
+
+def OP_ROOT         :=  1
+def OP_LIT_WHOLENUM :=  2
+def OP_LIT_NEGINT   :=  3
+def OP_LIT_FLOAT64  :=  4
+def OP_LIT_CHAR     :=  5
+def OP_LIT_STRING   :=  6
+def OP_IMPORT       :=  7
+def OP_IBID         :=  8
+def OP_CALL         :=  9
+def OP_DEFINE       := 10
+def OP_PROMISE      := 11
+def OP_DEFREC       := 12
+
+/**
+ * DataECode bytecodes is the compact fast form of the DataECode instruction
+ * set.
+ * <p>
+ * A kit is a set of utilities for manipulating things of a particular kind.
+ * The deBytecodeKit provides for recognition (dispatch) and building
+ * (code generation) of this instruction set.
+ *
+ * @see <a hrep=
+ *       "http://www.erights.org/data/serial/jhu-paper/modeling.html#as-eval"
+ * >Unserialization as Expression Evaluation</a>.
+ * @author Mark S. Miller
+ */
+def deBytecodeKit {
+
+    /**
+     * Makes a builder whose output (the result of buildRoot()) is a byte
+     * array holding a well-formed sequence of instructions.
+     */
+    to makeBuilder() :near {
+
+        def baos := makeByteArrayOutputStream()
+        def dos := makeDataOutputStream(baos)
+
+        def subBuilder := deBytecodeKit.makeStreamBuilder(dos)
+
+        def wrappingBuilder extends subBuilder \
+                            implements DEBuilderOf(void, byte[]) {
+
+            to getRootType() :near { byte[] }
+
+            to buildRoot(root) :byte[] {
+                super.buildRoot(root)
+                dos.close()
+                baos.toByteArray()
+            }
+        }
+    }
+
+    to makeStreamBuilder(dos :DataOutput) :near {
+
+        # The index of the next temp variable
+        var nextTemp := 0
+
+        def deBytecodeBuilder implements DEBuilderOf(void, void) {
+
+            to getNodeType() :near { void }
+            to getRootType() :near { void }
+
+            to buildRoot(_) :any {
+                dos.writeByte(OP_ROOT)
+                dos.flush()
+            }
+
+            to buildLiteral(value) {
+                switch (value) {
+                    match i :int {
+                        if (i >= 0) {
+                            dos.writeByte(OP_LIT_WHOLENUM)
+                            dos.writeWholeNum(i)
+                        } else {
+                            dos.writeByte(OP_LIT_NEGINT)
+                            dos.writeWholeNum(-i)
+                        }
+                    }
+                    match f :float64 {
+                        dos.writeByte(OP_LIT_FLOAT64)
+                        dos.writeDouble(f)
+                    }
+                    match c :char {
+                        dos.writeByte(OP_LIT_CHAR)
+                        dos.writeChar(c)
+                    }
+                    match str :String {
+                        dos.writeByte(OP_LIT_STRING)
+                        dos.writeUTF(str)
+                    }
+                }
+            }
+
+            to buildImport(varName :String) {
+                dos.writeByte(OP_IMPORT)
+                dos.writeUTF(varName)
+            }
+
+            to buildIbid(tempIndex :int) {
+                dos.writeByte(OP_IBID)
+                dos.writeWholeNum(tempIndex)
+            }
+
+            to buildCall(_, verb :String, args :void[]) {
+                dos.writeByte(OP_CALL)
+                dos.writeUTF(verb)
+                dos.writeWholeNum(args.size())
+            }
+
+            to buildDefine(_) :[void, int] {
+                def tempIndex := nextTemp
+                nextTemp += 1
+                dos.writeByte(OP_DEFINE)
+                [null, tempIndex]
+            }
+
+            to buildPromise() :int {
+                def promIndex := nextTemp
+                def resIndex := promIndex + 1
+                nextTemp += 2
+                dos.writeByte(OP_PROMISE)
+                promIndex
+            }
+
+            to buildDefrec(resIndex :int, _) {
+                dos.writeByte(OP_DEFREC)
+                dos.writeWholeNum(resIndex)
+            }
+        }
+    }
+
+    /**
+     *
+     */
+    to recognize(code :byte[], builder) :builder.getRootType() {
+        def bais := makeByteArrayInputStream(code)
+        def dis := makeDataInputStream(bais)
+        deBytecodeKit.recognizeStream(dis, builder)
+    }
+
+    /**
+     *
+     */
+    to recognizeStream(dis :DataInput, builder) :builder.getRootType() {
+
+        def stack := [].diverge()
+
+        while (true) {
+            switch (dis.readByte()) {
+                match ==OP_ROOT {
+                    return builder.buildRoot(stack.pop())
+                }
+                match ==OP_LIT_WHOLENUM {
+                    stack.push(builder.buildLiteral(dis.readWholeNum()))
+                }
+                match ==OP_LIT_NEGINT {
+                    stack.push(builder.buildLiteral(-(dis.readWholeNum())))
+                }
+                match ==OP_LIT_FLOAT64 {
+                    stack.push(builder.buildLiteral(dis.readDouble()))
+                }
+                match ==OP_LIT_CHAR {
+                    stack.push(builder.buildLiteral(dis.readChar()))
+                }
+                match ==OP_LIT_STRING {
+                    stack.push(builder.buildLiteral(dis.readUTF()))
+                }
+                match ==OP_IMPORT {
+                    stack.push(builder.buildImport(dis.readUTF()))
+                }
+                match ==OP_IBID {
+                    stack.push(builder.buildIbid(dis.readWholeNum()))
+                }
+                match ==OP_CALL {
+                    def verb := dis.readUTF()
+                    def arity := dis.readWholeNum()
+                    def stackSize := stack.size()
+                    def firstArgIndex := stackSize - arity
+                    def args := stack.removeRun(firstArgIndex, stackSize)
+                    def rec := stack.pop()
+                    stack.push(builder.buildCall(rec, verb, args))
+                }
+                match ==OP_DEFINE {
+                    # buildDefine normally hands back its argument, in which
+                    # case this code does not effect the stack.
+                    stack.push(builder.buildDefine(stack.pop())[0])
+                }
+                match ==OP_PROMISE {
+                    builder.buildPromise()
+                }
+                match ==OP_DEFREC {
+                    stack.push(builder.buildDefrec(dis.readWholeNum(),
+                                                   stack.pop()))
+                }
+            }
+        }
+    }
+}

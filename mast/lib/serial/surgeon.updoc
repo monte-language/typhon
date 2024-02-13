@@ -1,0 +1,82 @@
+#!/usr/bin/env rune
+
+# Copyright 2003 Hewlett Packard, Inc. under the terms of the MIT X license
+# found at http://www.opensource.org/licenses/mit-license.html ................
+
+
+? def makeSurgeon := <elib:serial.makeSurgeon>
+# value: <makeSurgeon>
+
+? def surgeon := makeSurgeon.withSrcKit("de: ")
+# value: <surgeon>
+
+? def src := surgeon.serialize([false, 3])
+# value: "de: [false, 3]"
+
+? surgeon.unserialize(src)
+# value: [false, 3]
+
+? surgeon.serialize(<file:.>)
+# problem: Can't uneval <file:c:/Documents and Settings/MILLERM1/Desktop/>
+#
+
+? surgeon.addFromPrivScope(privilegedScope)
+
+? def src := surgeon.serialize(<file:.>)
+# value: "de: <file: \"C:/Documents and Settings/MILLERM1/Desktop/\">"
+
+? def x := surgeon.unserialize(src)
+# value: <file:c:/Documents and Settings/MILLERM1/Desktop/>
+
+? introducer.onTheAir()
+# value: ["3DES_SDH_M2", "3DES_SDH_M"]
+
+? def forever := <import:java.lang.Long>.getMAX_VALUE()
+# value: 9223372036854775807
+
+? def sr := identityMgr.makeSturdyRef(3,identityMgr.nextSwiss(),forever)
+# value: <SturdyRef>
+
+? def src := surgeon.serialize(sr)
+
+? def sr2 := surgeon.unserialize(src)
+# value: <SturdyRef>
+
+? sr == sr2
+# value: true
+
+? surgeon.unserialize("de: spoon")
+# problem: <IndexOutOfBoundsException: spoon not found>
+
+? def foo{}
+# value: <foo>
+
+? surgeon.serialize(foo)
+# problem: Can't uneval <foo>
+
+? surgeon.beForgiving()
+
+? surgeon.unserialize("de: spoon")
+# value: <ref broken by problem: There is no spoon>
+
+? def src := surgeon.serialize(foo)
+# value: "de: <opaque:foo>"
+
+? surgeon.unserialize(src)
+# value: <ref broken by problem: opaque:foo>
+
+? def mvi := <unsafe:net.vattp.data.VatIdentity>
+# value: <unsafe:net.vattp.data.VatIdentity>
+
+? def kp := mvi.generateKeyPair(entropy)
+# value: <KeyPair>
+
+? def src := surgeon.serialize(kp)
+
+? def kp2 := surgeon.unserialize(src)
+# value: <KeyPair>
+
+? def src2 := surgeon.serialize(kp2)
+
+? src == src2
+# value: true
