@@ -37,7 +37,32 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "rpypkgs": "rpypkgs"
+      }
+    },
+    "rpypkgs": {
+      "inputs": {
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "typhon": "typhon"
+      },
+      "locked": {
+        "lastModified": 1713090744,
+        "narHash": "sha256-ny32FfhDyvQAx0+hKy1DU7RWLjbx6n3zoBRYHT1w2SE=",
+        "ref": "refs/heads/master",
+        "rev": "9a96d9823eef61883f720fc3c600f66e36e4f715",
+        "revCount": 21,
+        "type": "git",
+        "url": "git://git.pf.osdn.net/gitroot/c/co/corbin/rpypkgs.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "git://git.pf.osdn.net/gitroot/c/co/corbin/rpypkgs.git"
       }
     },
     "systems": {
@@ -52,6 +77,31 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
+        "type": "github"
+      }
+    },
+    "typhon": {
+      "inputs": {
+        "flake-utils": [
+          "rpypkgs",
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "rpypkgs",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1707184108,
+        "narHash": "sha256-641r2pA5/mAGX0Dx6/zEP4UtnbS0S0bfOIrJW37ygvA=",
+        "owner": "monte-language",
+        "repo": "typhon",
+        "rev": "fac865f75da5cba9802d2fe7442bec611bd54af4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "monte-language",
+        "repo": "typhon",
         "type": "github"
       }
     }

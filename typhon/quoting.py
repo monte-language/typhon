@@ -14,7 +14,7 @@
 
 from rpython.rlib.jit import elidable
 from rpython.rlib.rstring import UnicodeBuilder
-from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
+from rpython.rlib.unicodedata import unicodedb_13_0_0 as unicodedb
 
 
 escapes = {

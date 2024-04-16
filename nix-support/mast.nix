@@ -10,7 +10,7 @@ let
       then "-noverify"
       else "";
     in pkgs.runCommand name {} ''
-        ${typhonVm}/mt-typhon -l ${boot} ${boot}/loader run montec ${flags} ${mt} $out
+        ${typhonVm}/bin/mt-typhon -l ${boot} ${boot}/loader run montec ${flags} ${mt} $out
       '';
   exts = [ ".mt" ".mt.md" ".asdl" ];
   # Compile a whole tree.
@@ -33,6 +33,6 @@ let
 in buildMASTFarm.overrideAttrs (attrs: {
   # Run the tests in the built tree using the built tree's loader.
   buildCommand = attrs.buildCommand + ''
-    ${typhonVm}/mt-typhon -l $out $out/loader test all-tests
+    ${typhonVm}/bin/mt-typhon -l $out $out/loader test all-tests
   '';
 })

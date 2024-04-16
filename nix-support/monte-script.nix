@@ -87,22 +87,22 @@ let
     case $OPERATION in
         ${buildCmds}
         repl)
-            $RLWRAP ${typhonVm}/mt-typhon -l ${mast} \
+            $RLWRAP ${typhonVm}/bin/mt-typhon -l ${mast} \
               ${mast}/loader run tools/repl
             if [ $? == 1 ]; then
                 echo "Due to a Docker bug, readline-style editing is not currently available in this REPL. Sorry."
-                ${typhonVm}/mt-typhon -l ${mast} \
+                ${typhonVm}/bin/mt-typhon -l ${mast} \
                   ${mast}/loader run tools/repl
             fi
             ;;
         muffin)
             shift
-            ${typhonVm}/mt-typhon -l ${mast} \
+            ${typhonVm}/bin/mt-typhon -l ${mast} \
               ${mast}/loader run tools/muffin "$@"
             ;;
         lint)
             shift
-            ${typhonVm}/mt-typhon -l ${mast} ${mast}/loader \
+            ${typhonVm}/bin/mt-typhon -l ${mast} ${mast}/loader \
                        run montec -lint -terse "$@"
             ;;
         run|test|bench|dot)
@@ -118,7 +118,7 @@ let
                 usage 1
             else
                 DEST=''${3:-''${SOURCE%.mt.mast}}
-                ${typhonVm}/mt-typhon -l ${mast} ${mast}/loader \
+                ${typhonVm}/bin/mt-typhon -l ${mast} ${mast}/loader \
                            run montec -mix "$SOURCE" "$DEST"
             fi
             ;;
@@ -129,12 +129,12 @@ let
             else
                 if [[ "$SOURCE" != *.mast ]]; then
                    MASTSOURCE=''${SOURCE%.mt}.mast
-                   ${typhonVm}/mt-typhon -l ${mast} \
+                   ${typhonVm}/bin/mt-typhon -l ${mast} \
                        ${mast}/loader run montec -mix "$SOURCE" "$MASTSOURCE"
                 SOURCE=$MASTSOURCE
                 fi
                 if [[ "$SOURCE" == *.mast ]]; then
-                    ${typhonVm}/mt-typhon -l ${mast} -l $PWD \
+                    ${typhonVm}/bin/mt-typhon -l ${mast} -l $PWD \
                         ${mast}/loader run ''${SOURCE%.mast} "$@"
                 fi
             fi
@@ -144,7 +144,7 @@ let
             if [[ -z $SOURCE ]]; then
                 usage 1
             else
-                ${typhonVm}/mt-typhon -l ${mast} \
+                ${typhonVm}/bin/mt-typhon -l ${mast} \
                   ${mast}/loader run tools/dump "$SOURCE"
             fi
             ;;
@@ -153,7 +153,7 @@ let
             if [[ -z $SOURCE ]]; then
                 usage 1
             else
-                ${typhonVm}/mt-typhon -l ${mast} \
+                ${typhonVm}/bin/mt-typhon -l ${mast} \
                     ${mast}/loader run format "$SOURCE"
             fi
             ;;
@@ -171,7 +171,7 @@ let
     '';
     capnpc-script = pkgs.writeScript "capnpc-monte" ''
       #!${shellForMt}
-      ${typhonVm}/mt-typhon -l ${mast} \
+      exec ${typhonVm}/bin/mt-typhon -l ${mast} \
           ${mast}/loader run tools/capnpc "$@"
     '';
 

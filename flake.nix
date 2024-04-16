@@ -4,9 +4,16 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-22.05";
     flake-utils.url = "github:numtide/flake-utils";
+    rpypkgs = {
+      url = "git://git.pf.osdn.net/gitroot/c/co/corbin/rpypkgs.git";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        flake-utils.follows = "flake-utils";
+      };
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils, rpypkgs }:
     let
       noPythonCheck = p: p.overridePythonAttrs (old: {
         doCheck = false;
@@ -34,7 +41,7 @@
           };
           overlays = [ overlay ];
         };
-        typhon = import ./nix-support/typhon.nix pkgs;
+        typhon = import ./nix-support/typhon.nix { inherit pkgs rpypkgs; };
         qbe = pkgs.stdenv.mkDerivation {
           name = "qbe-unstable";
 
@@ -49,7 +56,7 @@
       in {
         overlays.default = overlay;
         packages = typhon // {
-          default = typhon.fullMonte;
+          default = typhon.monte;
         };
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [ cachix nix-tree ];

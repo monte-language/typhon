@@ -1,5 +1,5 @@
-{stdenv, fetchFromGitLab, fetchFromGitHub, lib, libsodium, libuv, libffi,
-pkg-config, pypy, pypyPackages, vmSrc, buildJIT}:
+{ stdenv, fetchFromGitLab, fetchFromGitHub, libsodium, libuv, libffi,
+pypy, system, vmSrc, rpypkgs, buildJIT }:
 
 let
   # https://foss.heptapod.net/pypy/pypy/
@@ -11,29 +11,18 @@ let
     rev = "90fd9ed34d52181de59cbfff863719472b05418e";
     sha256 = "03cshgvh8qcsyac4q4vf0sbvcm1m2ikgwycwip4cc7sw9pzpw6a3";
   };
-  macropy = pypyPackages.buildPythonPackage rec {
-    pname = "macropy";
-    version = "1.0.4";
-    name = "${pname}-${version}";
-    src = fetchFromGitHub {
-      owner = "lihaoyi";
-      repo = "macropy";
-      rev = "13993ccb08df21a0d63b091dbaae50b9dbb3fe3e";
-      sha256 = "12496896c823h0849vnslbdgmn6z9mhfkckqa8sb8k9qqab7pyyl";
-    };
-  };
-  optLevel = if buildJIT then "-Ojit" else "-O2";
-
-in
-stdenv.mkDerivation {
+in rpypkgs.lib.${system}.mkRPythonDerivation {
+  entrypoint = "main.py";
+  binName = "mt-typhon";
+  nativeBuildInputs = with rpypkgs.packages.${system}.rpythonPackages; [ macropy ];
+  buildInputs = [ libuv libsodium ];
+  optLevel = if buildJIT then "jit" else "2";
+} {
   name = if buildJIT then "typhon-vm" else "typhon-vm-nojit";
 
   src = vmSrc;
 
-  buildInputs = [ pypy
-                  pypyPackages.py pypyPackages.pytest
-                  macropy pypySrc
-                  pkg-config libffi libuv libsodium ];
+  # XXX really?
   propagatedBuildInputs = [ libffi libuv libsodium ];
 
   shellHook = ''
@@ -51,21 +40,6 @@ stdenv.mkDerivation {
     }
     trap typhon_cleanup EXIT
   '';
-
-  buildPhase = ''
-    source $stdenv/setup
-    mkdir -p ./rpython/_cache
-    cp -r ${pypySrc}/rpython .
-    chmod -R u+w rpython/
-    cp -r $src/main.py .
-    # Do the actual translation.
-    ${pypy}/bin/pypy -mrpython ${optLevel} main.py
-    '';
-
-  installPhase = ''
-    mkdir $out
-    cp mt-typhon $out/
-    '';
 
   separateDebugInfo = true;
 }

@@ -25,7 +25,7 @@ from rpython.rlib.rarithmetic import LONG_BIT, intmask, ovfcheck
 from rpython.rlib.rfloat import DBL_EPSILON, erfc, lgamma
 from rpython.rlib.rstring import StringBuilder, UnicodeBuilder, replace, split
 from rpython.rlib.rstruct.ieee import float_pack
-from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
+from rpython.rlib.unicodedata import unicodedb_13_0_0 as unicodedb
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
@@ -1453,7 +1453,7 @@ class BigInt(Object):
             return NAN
         except OverflowError:
             # Trade overflow for reduced dynamic range.
-            negate = self.bi.sign < 0 ^ other < 0
+            negate = self.bi.get_sign() < 0 ^ other < 0
             return NEG_INF if negate else INF
 
     @method("BigInt", "Double", _verb="floorDivide")

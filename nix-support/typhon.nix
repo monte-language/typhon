@@ -1,6 +1,6 @@
-nixpkgs:
+{ pkgs, rpypkgs }:
 let
-  lib = nixpkgs.lib;
+  lib = pkgs.lib;
   vmSrc = let loc = part: (toString ./..) + part;
    in builtins.filterSource (path: type:
     let p = toString path;
@@ -8,19 +8,17 @@ let
          (type == "directory" || lib.hasSuffix ".py" p)) ||
       p == loc "/typhon" ||
       p == loc "/main.py") ./..;
-  vmConfig = {
-    inherit vmSrc;
-    inherit (nixpkgs) pypy libsodium;
-    pypyPackages = nixpkgs.pypy.pkgs;
-    # Want to build Typhon with Clang instead of GCC? Uncomment this next
-    # line. ~ C.
-    # stdenv = nixpkgs.clangStdenv;
-  };
-  typhon = with nixpkgs; rec {
-    typhonVm = callPackage ./vm.nix (vmConfig // { buildJIT = false; });
-    typhonVmJIT = callPackage ./vm.nix (vmConfig // { buildJIT = true; });
+  typhon = with pkgs; rec {
+    # Want to build Typhon with Clang instead of GCC?
+    # Add `stdenv = pkgs.clangStdenv` to either VM. ~ C.
+    typhonVm = callPackage ./vm.nix {
+      inherit vmSrc rpypkgs; buildJIT = false;
+    };
+    typhonVmJIT = callPackage ./vm.nix {
+      inherit vmSrc rpypkgs; buildJIT = true;
+    };
     mast = callPackage ./mast.nix { typhonVm = typhonVmJIT;
-                                    pkgs = nixpkgs; };
+                                    pkgs = pkgs; };
 
     typhonDumpMAST = callPackage ./dump.nix {};
     # XXX broken for unknown reasons
@@ -28,26 +26,24 @@ let
     monte = callPackage ./monte-script.nix {
       typhonVm = typhonVmJIT; mast = mast;
     };
-    capnMast = callPackage ./capn.nix {
-      pkgs = nixpkgs; monte = monte;
-    };
-    fullMast = nixpkgs.symlinkJoin {
+    capnMast = callPackage ./capn.nix { inherit pkgs monte; };
+    fullMast = pkgs.symlinkJoin {
       name = "mast-full";
       paths = [ mast capnMast ];
     };
     fullMonte = callPackage ./monte-script.nix {
       typhonVm = typhonVmJIT; mast = fullMast;
     };
-    mtBusybox = monte.override { shellForMt = "${nixpkgs.busybox}/bin/sh"; };
+    mtBusybox = monte.override { shellForMt = "${pkgs.busybox}/bin/sh"; };
     mtLite = mtBusybox.override { withBuild = false; };
   };
   typhonDocker = {
-    mtDocker = nixpkgs.dockerTools.buildImage {
+    mtDocker = pkgs.dockerTools.buildImage {
         name = "monte-dev";
         tag = "latest";
-        contents = [nixpkgs.nix.out nixpkgs.busybox typhon.mtBusybox typhon.typhonVmJIT];
+        contents = [pkgs.nix.out pkgs.busybox typhon.mtBusybox typhon.typhonVmJIT];
         runAsRoot = ''
-          #!${nixpkgs.busybox}/bin/sh
+          #!${pkgs.busybox}/bin/sh
           mkdir -p /etc
           tee /etc/profile <<'EOF'
           echo "Try \`monte repl' for an interactive Monte prompt."
@@ -55,11 +51,11 @@ let
           EOF
         '';
         config = {
-            Cmd = [ "${nixpkgs.busybox}/bin/sh" "-l" ];
+            Cmd = [ "${pkgs.busybox}/bin/sh" "-l" ];
             WorkingDir = "/";
             };
         };
-    mtLiteDocker = nixpkgs.dockerTools.buildImage {
+    mtLiteDocker = pkgs.dockerTools.buildImage {
         name = "repl";
         tag = "latest";
         contents = with typhon; [mtLite typhonVmJIT];

@@ -4,7 +4,7 @@ stdenv.mkDerivation {
     name = "typhon-bench";
     buildInputs = [ typhonVm mast ];
     buildPhase = ''
-      ln -s ${typhonVm}/mt-typhon .
+      ln -s ${typhonVm}/bin/mt-typhon .
       ./mt-typhon -l ${mast} -l ${mast}/mast -b ${mast}/loader bench \
          ${mast}/mast/bench/{brot,nqueens,primeCount,richards}
       '';#*/

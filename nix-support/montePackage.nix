@@ -24,7 +24,7 @@ let
       for srcP in ${lib.concatStringsSep " " pathNames}; do
         for srcF in `find ./$srcP -name \\*.mt`; do
           destF=\${srcF%%.mt}.mast
-          ${typhonVm}/mt-typhon -l ${mast}/mast ${mast}/loader run montec -mix $srcF $destF
+          ${typhonVm}/bin/mt-typhon -l ${mast}/mast ${mast}/loader run montec -mix $srcF $destF
           fail=$?
           if [ $fail -ne 0 ]; then
               exit $fail
@@ -34,7 +34,7 @@ let
       ";
       doCheck = doCheck;
       checkPhase = if doCheck then ''
-        ${typhonVm}/mt-typhon ${dependencySearchPaths} -l ${mast}/mast -l . ${mast}/loader test ${entrypoint}
+        ${typhonVm}/bin/mt-typhon ${dependencySearchPaths} -l ${mast}/mast -l . ${mast}/loader test ${entrypoint}
       '' else null;
       installPhase = "
       mkdir -p $out
@@ -70,7 +70,7 @@ let
         for p in ${lib.concatStringsSep " " pathNames}; do
           LOCALPKGPATHS+=" -l $out/$p"
         done
-        ${typhonVm}/mt-typhon ${dependencySearchPaths} \$LOCALPKGPATHS -l ${mast}/mast ${mast}/loader \$OPERATION ${entrypoint} "\$@"
+        ${typhonVm}/bin/mt-typhon ${dependencySearchPaths} \$LOCALPKGPATHS -l ${mast}/mast ${mast}/loader \$OPERATION ${entrypoint} "\$@"
         EOF
         chmod +x $out/bin/${entryPointName}
         '' else "");
