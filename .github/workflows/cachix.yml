@@ -6,8 +6,9 @@ jobs:
         runs-on: ubuntu-latest
         steps:
         - uses: actions/checkout@v4
-        - uses: cachix/install-nix-action@v25
+        - uses: cachix/install-nix-action@v26
         - uses: cachix/cachix-action@v14
           with:
               name: monte
               signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
+        - run: nix build

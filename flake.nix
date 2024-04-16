@@ -1,13 +1,28 @@
 {
-  description = "A virtual machine for Monte";
+  description = "A virtual machine and standard library for Monte";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-22.05";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
   outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
+    let
+      noPythonCheck = p: p.overridePythonAttrs (old: {
+        doCheck = false;
+      });
+      overlay = final: prev: {
+        libsodium = prev.libsodium.overrideDerivation (oldAttrs: {
+          stripAllList = "lib";
+        });
+        pypy = prev.pypy.override {
+          packageOverrides = (s: su: {
+            mock = noPythonCheck su.mock;
+            pytest = noPythonCheck su.pytest;
+          });
+        };
+      };
+    in flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
           inherit system;
@@ -17,6 +32,7 @@
               "python-2.7.18.7"
             ];
           };
+          overlays = [ overlay ];
         };
         typhon = import ./nix-support/typhon.nix pkgs;
         qbe = pkgs.stdenv.mkDerivation {
@@ -31,11 +47,12 @@
           doCheck = true;
         };
       in {
+        overlays.default = overlay;
         packages = typhon // {
           default = typhon.fullMonte;
         };
         devShells.default = pkgs.mkShell {
-          packages = with pkgs; [ cachix ];
+          packages = with pkgs; [ cachix nix-tree ];
         };
       }
     );
