@@ -1,7 +1,6 @@
 nixpkgs:
 let
   lib = nixpkgs.lib;
-  libsodium0 = nixpkgs.libsodium.overrideDerivation (oldAttrs: {stripAllList = "lib";});
   vmSrc = let loc = part: (toString ./..) + part;
    in builtins.filterSource (path: type:
     let p = toString path;
@@ -9,16 +8,10 @@ let
          (type == "directory" || lib.hasSuffix ".py" p)) ||
       p == loc "/typhon" ||
       p == loc "/main.py") ./..;
-  pypy = nixpkgs.pypy.override {
-    packageOverrides = (s: su: {
-      mock = su.mock.overridePythonAttrs (old: { doCheck = false; });
-      pytest = su.pytest.overridePythonAttrs (old: { doCheck = false; });
-    });
-  };
   vmConfig = {
-    inherit vmSrc pypy;
-    pypyPackages = pypy.pkgs;
-    libsodium = libsodium0;
+    inherit vmSrc;
+    inherit (nixpkgs) pypy libsodium;
+    pypyPackages = nixpkgs.pypy.pkgs;
     # Want to build Typhon with Clang instead of GCC? Uncomment this next
     # line. ~ C.
     # stdenv = nixpkgs.clangStdenv;
