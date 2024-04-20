@@ -14,15 +14,14 @@ let
 in rpypkgs.lib.${system}.mkRPythonDerivation {
   entrypoint = "main.py";
   binName = "mt-typhon";
-  nativeBuildInputs = with rpypkgs.packages.${system}.rpythonPackages; [ macropy ];
-  buildInputs = [ libuv libsodium ];
+  withLibs = ls: [ ls.macropy ];
   optLevel = if buildJIT then "jit" else "2";
 } {
   name = if buildJIT then "typhon-vm" else "typhon-vm-nojit";
 
   src = vmSrc;
 
-  # XXX really?
+  buildInputs = [ libuv libsodium ];
   propagatedBuildInputs = [ libffi libuv libsodium ];
 
   shellHook = ''
