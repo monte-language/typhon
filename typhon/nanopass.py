@@ -241,3 +241,98 @@ def visit%(name)s(self, specimen):
     irAttrs["selfPass"] = selfPass
 
     return type(name + "IR", (object,), irAttrs)()
+
+def withHoles(irClass):
+    """
+    Create an object similar to the IR class but for building an AST
+    pattern-matching template rather than building an AST. Designed for use in
+    unit tests.
+
+    Note that this currently doesn't check the schema when constructing a
+    quasi-AST so it's possible to construct a template that will not match any
+    valid AST.
+    """
+    class IRMatcherInstance(object):
+        def __init__(self, quasi, name, args, cls):
+            self.quasi = quasi
+            self.name = name
+            self.args = args
+            self.cls = cls
+
+        def match(self, specimen):
+            if not isinstance(specimen, self.cls):
+                raise ValueError("Expected %s, got %s" % (
+                    self.cls.__name__, type(specimen).__name__))
+            for p, (argname, argtype) in zip(self.args,
+                                             self.quasi.schema[self.name]):
+                val = getattr(specimen, argname)
+                if argtype is None or argtype in irClass.terminals:
+                    if isinstance(p, IRHole):
+                        p.match(val)
+                        continue
+                    elif val != p:
+                        raise ValueError("Expected %r, got %r" % (p, val))
+                    else:
+                        continue
+                if (argtype.endswith('*') and isinstance(p, list)):
+                    for subp, item in zip(p, val):
+                        subp.match(item)
+                else:
+                    p.match(val)
+            return self.quasi.holeMatches
+
+    class IRMatcher(object):
+        def __init__(self, name, quasi, original):
+            self.quasi = quasi
+            self.name = name
+            self.original = original
+
+        def __call__(self, *a):
+            if len(a) != len(self.quasi.schema[self.name]):
+                raise ValueError("Expected %d arguments, got %d" % (
+                    len(a), len(self.quasi.schema[self.name])))
+            return IRMatcherInstance(self.quasi, self.name, a, self.original)
+
+    class IRHole(object):
+        def __init__(self, name, quasi, typeConstructor):
+            self.name = name
+            self.quasi = quasi
+            self.typeConstructor = typeConstructor
+
+        def match(self, specimen):
+            if (self.typeConstructor is not None and
+                not isinstance(specimen, self.typeConstructor)):
+                raise ValueError("Expected %s, got %s" % (
+                    self.typeConstructor.__name__, type(specimen).__name__))
+            self.quasi.holeMatches[self.name] = specimen
+
+
+    class QuasiIR(object):
+        def __init__(self):
+            self.holes = []
+            self.holeMatches = {}
+
+            self.schema = {}
+            for nonterm, constructors in irClass.nonterms.iteritems():
+                for constructor, pieces in constructors.iteritems():
+                    self.schema[constructor] = pieces
+
+        def __getattr__(self, name):
+            return IRMatcher(name, self, getattr(irClass, name))
+
+        def HOLE(self, name, typeConstructor=None):
+            if typeConstructor is not None:
+                if isinstance(typeConstructor, IRMatcher):
+                    tycon = typeConstructor.original
+                elif isinstance(typeConstructor, irClass._NonTerminal):
+                    tycon = typeConstructor
+                else:
+                    raise ValueError("%s is not a type constructor for "
+                                     "either %s or %s" % (typeConstructor, irClass, self))
+            else:
+                tycon = None
+            h = IRHole(name, self, tycon)
+            self.holes.append(h)
+            return h
+
+    return QuasiIR()
