@@ -2,10 +2,10 @@
   description = "A virtual machine and standard library for Monte";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-23.05";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
     flake-utils.url = "github:numtide/flake-utils";
     rpypkgs = {
-      url = "git://git.pf.osdn.net/gitroot/c/co/corbin/rpypkgs.git";
+      url = "github:rpypkgs/rpypkgs";
       inputs = {
         nixpkgs.follows = "nixpkgs";
         flake-utils.follows = "flake-utils";
@@ -36,7 +36,7 @@
           config = {
             allowBroken = true;
             permittedInsecurePackages = [
-              "python-2.7.18.6"
+              "python-2.7.18.8"
             ];
           };
           overlays = [ overlay ];

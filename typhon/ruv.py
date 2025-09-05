@@ -378,7 +378,7 @@ def readStreamCB(stream, status, buf):
     # reading again.
     readStop(stream)
     if status > 0:
-        data = rffi.charpsize2str(buf.c_base, status)
+        data = rffi.charpsize2str(buf[0].c_base, status)
         k.do(state, Ok(data))
     elif status == -4095:
         k.do(state, Ok(""))
@@ -579,6 +579,21 @@ def wrapStream(stream, refCount):
     wrapper = UVStream(stream, refCount)
     return wrapper
 
+_PROCESS_H = '''
+#include <uv.h>
+
+RPY_EXTERN
+void
+monte_helper_add_exit_cb(uv_process_options_t* options,
+                        void (*uv_exit_cb)(uv_process_t*,
+                                           int64_t exit_status,
+                                           int term_signal));
+
+RPY_EXTERN
+void
+monte_helper_set_stdio_stream(uv_stdio_container_t *stdio,
+                              uv_stream_t *stream);
+'''
 
 _PROCESS_C = '''
 #include <uv.h>
@@ -605,7 +620,8 @@ monte_helper_set_stdio_stream(uv_stdio_container_t *stdio,
 _helper_eci = ExternalCompilationInfo(
     includes=['uv.h'],
     include_dirs=envPaths("TYPHON_INCLUDE_PATH"),
-    separate_module_sources=[_PROCESS_C])
+    separate_module_sources=[_PROCESS_C],
+    post_include_bits=[_PROCESS_H])
 
 exit_cb = rffi.CCallback([process_tp, rffi.LONG, rffi.INT], lltype.Void)
 add_exit_cb = rffi.llexternal('monte_helper_add_exit_cb', [process_options_tp,
@@ -687,7 +703,9 @@ def spawn(loop, process, file, args, env, streams):
     check("spawn", rv)
 
 
-read_cb = rffi.CCallback([stream_tp, rffi.SSIZE_T, buf_tp], lltype.Void)
+const_buf_tp = lltype.Ptr(lltype.Array(buf_t, hints={"nolength": True,
+                                                     "render_as_const": True}))
+read_cb = rffi.CCallback([stream_tp, rffi.SSIZE_T, const_buf_tp], lltype.Void)
 write_cb = rffi.CCallback([write_tp, rffi.INT], lltype.Void)
 connect_cb = rffi.CCallback([connect_tp, rffi.INT], lltype.Void)
 shutdown_cb = rffi.CCallback([shutdown_tp, rffi.INT], lltype.Void)
@@ -737,6 +755,8 @@ tcp_bind = rffi.llexternal("uv_tcp_bind", [tcp_tp, rffi.VOIDP, rffi.UINT],
 tcp_connect = rffi.llexternal("uv_tcp_connect", [connect_tp, tcp_tp,
                                                  rffi.VOIDP, connect_cb],
                               rffi.INT, compilation_info=eci)
+@specialize.call_location()
+def sockaddr(p): return rffi.cast(lltype.Ptr(s.sockaddr), sin)
 
 
 def alloc_tcp(loop):
@@ -759,7 +779,7 @@ def tcp4Bind(stream, address, port):
         assert False
 
     # No flags.
-    rv = check("tcp_bind", tcp_bind(stream, sin, 0))
+    rv = check("tcp_bind", tcp_bind(stream, sockaddr(sin), 0))
     return rv
 
 
@@ -777,7 +797,7 @@ def tcp6Bind(stream, address, port):
         assert False
 
     # No flags.
-    rv = check("tcp_bind", tcp_bind(stream, sin, 0))
+    rv = check("tcp_bind", tcp_bind(stream, sockaddr(sin), 0))
     return rv
 
 
@@ -792,7 +812,7 @@ def tcp4Connect(stream, address, port, callback):
         print "tcp4Connect: inet_pton failed!?"
         assert False
 
-    rv = check("tcp_connect", tcp_connect(connect, stream, sin, callback))
+    rv = check("tcp_connect", tcp_connect(connect, stream, sockaddr(sin), callback))
     return rv
 
 
@@ -807,7 +827,7 @@ def tcp6Connect(stream, address, port, callback):
         print "tcp6Connect: inet_pton failed!?"
         assert False
 
-    rv = check("tcp_connect", tcp_connect(connect, stream, sin, callback))
+    rv = check("tcp_connect", tcp_connect(connect, stream, sockaddr(sin), callback))
     return rv
 
 
@@ -1128,12 +1148,15 @@ def alloc_gai():
     return lltype.malloc(cConfig["getaddrinfo_t"], flavor="raw", zero=True)
 
 
-ip4_name = rffi.llexternal("uv_ip4_name", [s.sockaddr_ptr, rffi.CCHARP,
+ip4_name = rffi.llexternal("uv_ip4_name", [lltype.Ptr(s.sockaddr_in), rffi.CCHARP,
                                            rffi.SIZE_T],
                            rffi.INT, compilation_info=eci)
-ip6_name = rffi.llexternal("uv_ip6_name", [s.sockaddr_ptr, rffi.CCHARP,
+ip6_name = rffi.llexternal("uv_ip6_name", [lltype.Ptr(s.sockaddr_in6), rffi.CCHARP,
                                            rffi.SIZE_T],
                            rffi.INT, compilation_info=eci)
+ip_name = rffi.llexternal("uv_ip_name", [s.sockaddr_ptr, rffi.CCHARP,
+                                         rffi.SIZE_T],
+                          rffi.INT, compilation_info=eci)
 inet_ntop = rffi.llexternal("uv_inet_ntop", [rffi.INT, rffi.VOIDP,
                                              rffi.CCHARP, rffi.SIZE_T],
                             rffi.INT, compilation_info=eci)
@@ -1152,8 +1175,9 @@ def IP4Name(sockaddr):
 def IP6Name(sockaddr):
     size = 46
     with rffi.scoped_alloc_buffer(size) as buf:
-        check("ip6_name", ip6_name(sockaddr, buf.raw, size))
+        check("ip_name", ip_name(sockaddr, buf.raw, size))
         return buf.str(size).split('\x00', 1)[0]
+IP4Name = IP6Name
 
 
 def magic_gaiCB(gai, status, ai):
