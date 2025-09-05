@@ -64,7 +64,7 @@ class IP4AddrInfo(AddrInfo):
                                       u"unknown")
         # XXX getprotoent(3)
         self.protocol = getintfield(ai, "c_ai_protocol")
-        self.addr = ruv.IP4Name(ai.c_ai_addr)
+        self.addr = ruv.IPName(ai.c_ai_addr)
 
     def toString(self):
         return u"IP4AddrInfo(%s, %s, %d, %d)" % (bytesToString(self.addr),
@@ -88,7 +88,7 @@ class IP6AddrInfo(AddrInfo):
                                       u"unknown")
         # XXX getprotoent(3)
         self.protocol = getintfield(ai, "c_ai_protocol")
-        self.addr = ruv.IP6Name(ai.c_ai_addr)
+        self.addr = ruv.IPName(ai.c_ai_addr)
 
     def toString(self):
         return u"IP6AddrInfo(%s, %s, %d, %d)" % (bytesToString(self.addr),

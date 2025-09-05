@@ -1165,19 +1165,12 @@ inet_pton = rffi.llexternal("uv_inet_pton", [rffi.INT, rffi.CCHARP,
                             rffi.INT, compilation_info=eci)
 
 
-def IP4Name(sockaddr):
-    size = 16
-    with rffi.scoped_alloc_buffer(size) as buf:
-        check("ip4_name", ip4_name(sockaddr, buf.raw, size))
-        return buf.str(size).split('\x00', 1)[0]
-
-
-def IP6Name(sockaddr):
+def IPName(sockaddr):
+    # Big enough for IPv6!
     size = 46
     with rffi.scoped_alloc_buffer(size) as buf:
         check("ip_name", ip_name(sockaddr, buf.raw, size))
         return buf.str(size).split('\x00', 1)[0]
-IP4Name = IP6Name
 
 
 def magic_gaiCB(gai, status, ai):
