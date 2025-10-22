@@ -66,3 +66,4 @@ result
 mt-typhon
 rpython/
 pypy-*
+.direnv/
