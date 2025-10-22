@@ -197,4 +197,5 @@ in
     src = let loc = part: (toString ./..) + part;
      in builtins.filterSource (path: type:
       lib.hasPrefix (loc "/nix-support") (toString path)) ./..;
+    meta.mainProgram = "monte";
   }
