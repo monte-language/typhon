@@ -1,0 +1,84 @@
+#!/usr/bin/env rune
+
+# Copyright 2002 Combex, Inc. under the terms of the MIT X license
+# found at http://www.opensource.org/licenses/mit-license.html ................
+
+    ? def makeUncall := <elib:serial.makeUncall>
+    # value: <makeUncall>
+
+    ? def loaders := [<import:org.erights.*>, <import:*>, unsafe__uriGetter]
+    # value: [<import:org.erights.*>, <import:*>, <unsafe:*>]
+
+    ? def uncall := makeUncall(loaders)
+    # value: <uncall>
+
+    ? uncall(__makeList)
+    # value: [<import:org.erights.*>, "get", ["e.elib.tables.ConstList"]]
+
+    ? uncall([3, 'c'])
+    # value: [<elib:tables.ConstList>, "run", [3, 'c']]
+
+Testing object-defined transparency
+
+    ? def selfish {
+    >     to __optUncall() :[any, String, any[]] {
+    >         [37, "whatMeWorry", [2, 'x']]
+    >     }
+    > }
+    # value: <selfish>
+
+    ? uncall(selfish)
+    # value: [37, "whatMeWorry", [2, 'x']]
+
+Testing cauterizer
+
+    ? def testObj {}
+    # value: <testObj>
+
+    ? uncall(testObj) == null
+    # value: true
+
+    ? def opaque__uriGetter {}
+    # value: <opaque__uriGetter>
+
+    ? def cauterizingUncall := makeUncall.cauterizer(uncall, opaque__uriGetter)
+    # value: <cauterizingUncall>
+
+    ? cauterizingUncall(testObj)
+    # value: [<opaque__uriGetter>, "get", ["testObj"]]
+
+Testing amplifier
+
+    ? def [xSealer,xUnsealer] := <elib:sealing.Brand>("X")
+    # value: [<X sealer>, <X unsealer>]
+
+    ? def forXsEyesOnly {
+    >     to __optSealedDispatch(brand) :near {
+    >         if (xSealer.getBrand() == brand) {
+    >             xSealer.seal([3, "add", [4]])
+    >         } else {
+    >             null
+    >         }
+    >     }
+    > }
+    # value: <forXsEyesOnly>
+
+    ? uncall(forXsEyesOnly) == null
+    # value: true
+
+    ? def amplifyingUncall := makeUncall.amplifier(uncall, xUnsealer)
+    # value: <amplifyingUncall>
+
+    ? amplifyingUncall(forXsEyesOnly)
+    # value: [3, "add", [4]]
+
+Testing onlySelfless
+
+    ? def onlySelflessUncall := makeUncall.onlySelfless(uncall)
+    # value: <onlySelflessUncall>
+
+    ? onlySelflessUncall([3, 'c'])
+    # value: [<elib:tables.ConstList>, "run", [3, 'c']]
+
+    ? onlySelflessUncall(selfish) == null
+    # value: true
